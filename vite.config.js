@@ -16,5 +16,6 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
-  base: '/transitPro-demo/' // IMPORTANT pour GitHub Pages
+  base: '/'
+  // base: '/transitPro-demo/' // IMPORTANT pour GitHub Pages
 })
