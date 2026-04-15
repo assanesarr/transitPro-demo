@@ -784,7 +784,7 @@ export default function TransitaireDashboard() {
                     </SelectContent>
                   </Select>
                   <Select value={filtreClient} onValueChange={setFiltreClient}>
-                    <SelectTrigger className="w-44 h-8 text-xs rounded-xl"><SelectValue placeholder="Client" /></SelectTrigger>
+                    <SelectTrigger className="w-44 h-8 text-xs rounded-xl"><SelectValue placeholder="Client"  /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Tous clients</SelectItem>
                       {clients.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.nom}</SelectItem>)}
