@@ -322,6 +322,10 @@ export default function TransitaireDashboard() {
   const [vue, setVue] = useState("dashboard"); // dashboard | dossiers | clients | dossier_detail
   const [dossierActif, setDossierActif] = useState(null);
   const [clientActif, setClientActif] = useState(null);
+  const [dossierView, setDossierView] = useState("grid"); // "grid" | "list"
+  const [clientView, setClientView] = useState("grid"); // "grid" | "list"
+  const [clientSearch, setClientSearch] = useState("");
+  const [clientTypeFilter, setClientTypeFilter] = useState("all");
 
   // Config app
   const [config, setConfig] = useState({
@@ -375,6 +379,26 @@ export default function TransitaireDashboard() {
   };
   const setConf = (section, key, val) => setConfig(c => ({ ...c, [section]: { ...c[section], [key]: val } }));
 
+  const [personnel, setPersonnel] = useState(USERS_DB.map(u => ({
+    ...u, dept: "Transit", adresse: "", dateEmbauche: "", note: "",
+  })));
+  const EMPTY_PERS = { id: null, prenom: "", nom: "", poste: "", role: "Transitaire", dept: "Transit", tel: "", email: "", avatar: "", password: "", adresse: "", dateEmbauche: "", actif: true, note: "" };
+  const [form, setForm] = useState(EMPTY_PERS);
+  const [editId, setEditId] = useState(null);
+  const [errors, setErrors] = useState({});
+  const [showForm, setShowForm] = useState(false);
+  const [searchP, setSearchP] = useState("");
+  const [filterRole, setFilterRole] = useState("all");
+  const [filterDept, setFilterDept] = useState("all");
+  const [filterActif, setFilterActif] = useState("all"); // "all" | "actif" | "inactif"
+  
+  const EMPTY_CAT_FORM = { key: "", label: "", icon: "💸", color: "text-slate-600", bg: "bg-slate-50", border: "border-slate-200" };
+  const [catForm, setCatForm] = useState(EMPTY_CAT_FORM);
+  const [catFormErr, setCatFormErr] = useState({});
+  const [editIdx, setEditIdx] = useState(null); // null = add, number = edit
+
+
+
   // Filtres dossiers
   const [filtreStatut, setFiltreStatut] = useState("all");
   const [filtreClient, setFiltreClient] = useState("all");
@@ -395,28 +419,6 @@ export default function TransitaireDashboard() {
   const [decaissementDossierId, setDecaissementDossierId] = useState(null);
   const EMPTY_DECAISS = { categorie: "Debarquement", montant: "", date: today, ref: "", mode: "Virement bancaire", note: "" };
   const [formDecaiss, setFormDecaiss] = useState(EMPTY_DECAISS);
-
-  const EMPTY_PERS = { id: null, prenom: "", nom: "", poste: "", role: "Transitaire", dept: "Transit", tel: "", email: "", avatar: "", password: "", adresse: "", dateEmbauche: "", actif: true, note: "" };
-
-  const [personnel, setPersonnel] = useState(USERS_DB.map(u => ({
-    ...u, dept: "Transit", adresse: "", dateEmbauche: "", note: "",
-  })));
-  const [form, setForm] = useState(EMPTY_PERS);
-  const [editId, setEditId] = useState(null);
-  const [errors, setErrors] = useState({});
-  const [showForm, setShowForm] = useState(false);
-  const [searchP, setSearchP] = useState("");
-  const [filterRole, setFilterRole] = useState("all");
-  const [filterDept, setFilterDept] = useState("all");
-  const [filterActif, setFilterActif] = useState("all"); // "all" | "actif" | "inactif"
-
-
-  const EMPTY_CAT_FORM = { key: "", label: "", icon: "💸", color: "text-slate-600", bg: "bg-slate-50", border: "border-slate-200" };
-  const [catForm, setCatForm] = useState(EMPTY_CAT_FORM);
-  const [catFormErr, setCatFormErr] = useState({});
-  const [editIdx, setEditIdx] = useState(null); // null = add, number = edit
-
-
 
   const enregistrerDecaissement = () => {
     const mt = parseInt(formDecaiss.montant);
@@ -473,10 +475,12 @@ export default function TransitaireDashboard() {
     const total = dossiers.reduce((s, d) => s + d.montantTotal, 0);
     const paye = dossiers.reduce((s, d) => s + totalPaye(d), 0);
     const reste = total - paye;
+    const totalDecaiss = dossiers.reduce((s, d) => s + totalDecaisse(d), 0);
+    const soldeNet = paye - totalDecaiss;
     const enCours = dossiers.filter(d => !["cloture", "annule"].includes(d.statut)).length;
     const urgents = dossiers.filter(d => d.priorite === "urgente" && !["cloture", "annule"].includes(d.statut)).length;
     const aTraiter = dossiers.filter(d => ["nouveau", "attente_doc"].includes(d.statut)).length;
-    return { total, paye, reste, enCours, urgents, aTraiter };
+    return { total, paye, reste, totalDecaiss, soldeNet, enCours, urgents, aTraiter };
   }, [dossiers]);
 
   /* ── Dossiers filtrés ── */
@@ -581,8 +585,8 @@ export default function TransitaireDashboard() {
       {/* ══ SIDEBAR + HEADER layout ══ */}
       <div className="flex">
 
-        {/* ── Sidebar ── */}
-        <aside className="w-56 min-h-screen bg-slate-900 flex flex-col hidden md:flex shrink-0">
+        {/* ── Sidebar fixed ── */}
+        <aside className="w-56 h-screen bg-slate-900 flex flex-col hidden md:flex shrink-0 fixed top-0 left-0 z-30 overflow-y-auto">
           <div className="px-5 py-5 border-b border-slate-800">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 bg-amber-400 rounded-lg flex items-center justify-center shrink-0">
@@ -628,8 +632,8 @@ export default function TransitaireDashboard() {
           </div>
         </aside>
 
-        {/* ── Main ── */}
-        <div className="flex-1 min-w-0 p-4 md:p-6 space-y-5">
+        {/* ── Main (offset for fixed sidebar) ── */}
+        <div className="flex-1 min-w-0 p-4 md:p-6 space-y-5 md:ml-56">
 
           {/* Mobile nav */}
           <div className="flex md:hidden gap-2 mb-2">
@@ -655,23 +659,42 @@ export default function TransitaireDashboard() {
                 </button>
               </div>
 
-              {/* KPI */}
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              {/* KPI Row 1 — Financier */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                 {[
-                  { label: "Total facturé", value: fmtM(stats.total), color: "text-slate-900", icon: "💰" },
-                  { label: "Encaissé", value: fmtM(stats.paye), color: "text-emerald-600", icon: "✓" },
-                  { label: "Reste à percevoir", value: fmtM(stats.reste), color: "text-rose-500", icon: "⏳" },
-                  { label: "Dossiers actifs", value: stats.enCours, color: "text-blue-600", icon: "📁" },
-                  { label: "À traiter", value: stats.aTraiter, color: "text-amber-600", icon: "⚠" },
-                  { label: "Urgents", value: stats.urgents, color: "text-rose-600", icon: "🔴" },
+                  { label: "Total facturé", value: fmtM(stats.total), color: "text-slate-900", bg: "bg-white", icon: "💰", sub: "Prestations TTC" },
+                  { label: "Encaissements", value: fmtM(stats.paye), color: "text-emerald-600", bg: "bg-emerald-50", icon: "⬇", sub: "Reçus clients" },
+                  { label: "Décaissements", value: fmtM(stats.totalDecaiss), color: "text-rose-600", bg: "bg-rose-50", icon: "⬆", sub: "Frais réglés" },
+                  { label: "Solde net", value: fmtM(Math.abs(stats.soldeNet)), color: stats.soldeNet >= 0 ? "text-blue-700" : "text-orange-600", bg: stats.soldeNet >= 0 ? "bg-blue-50" : "bg-orange-50", icon: stats.soldeNet >= 0 ? "✓" : "!", sub: stats.soldeNet >= 0 ? "Bénéfice" : "Déficit" },
+                  { label: "Reste à percevoir", value: fmtM(stats.reste), color: "text-amber-600", bg: "bg-amber-50", icon: "⏳", sub: "Non encaissé" },
                 ].map(k => (
-                  <Card key={k.label} className="rounded-2xl border-slate-100 shadow-sm">
+                  <Card key={k.label} className={`rounded-2xl border-0 shadow-sm ${k.bg}`}>
                     <CardContent className="p-4">
-                      <div className="flex items-start justify-between mb-1">
-                        <p className="text-xs text-slate-400 leading-tight">{k.label}</p>
-                        <span className="text-base">{k.icon}</span>
+                      <div className="flex items-start justify-between mb-2">
+                        <p className="text-xs font-semibold text-slate-500 leading-tight">{k.label}</p>
+                        <span className={`text-xs font-bold w-6 h-6 rounded-lg flex items-center justify-center ${k.color} bg-white/60`}>{k.icon}</span>
                       </div>
-                      <p className={`text-lg font-bold ${k.color} leading-tight`}>{k.value}</p>
+                      <p className={`text-xl font-black ${k.color} leading-tight tabular-nums`}>{k.value}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">{k.sub}</p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+
+              {/* KPI Row 2 — Dossiers */}
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: "Dossiers actifs", value: stats.enCours, color: "text-blue-600", bg: "bg-blue-50/60", icon: "📁" },
+                  { label: "À traiter", value: stats.aTraiter, color: "text-amber-600", bg: "bg-amber-50/60", icon: "⚠" },
+                  { label: "Urgents", value: stats.urgents, color: "text-rose-600", bg: "bg-rose-50/60", icon: "🔴" },
+                ].map(k => (
+                  <Card key={k.label} className={`rounded-2xl border-0 shadow-sm ${k.bg} cursor-pointer hover:shadow-md transition-shadow`} onClick={() => setVue("dossiers")}>
+                    <CardContent className="p-4 flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-semibold text-slate-500">{k.label}</p>
+                        <p className={`text-3xl font-black ${k.color} leading-tight`}>{k.value}</p>
+                      </div>
+                      <span className="text-2xl">{k.icon}</span>
                     </CardContent>
                   </Card>
                 ))}
@@ -772,107 +795,203 @@ export default function TransitaireDashboard() {
                 </button>
               </div>
 
-              {/* Filtres */}
-              <Card className="rounded-2xl border-slate-100 shadow-sm">
-                <CardContent className="p-4 flex flex-wrap gap-2 items-center">
-                  <Input placeholder="Rechercher…" className="w-44 h-8 text-xs rounded-xl" value={recherche} onChange={e => setRecherche(e.target.value)} />
-                  <Select value={filtreStatut} onValueChange={setFiltreStatut}>
-                    <SelectTrigger className="w-36 h-8 text-xs rounded-xl"><SelectValue placeholder="Statut" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Tous statuts</SelectItem>
-                      {Object.entries(STATUTS_DOSSIER).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  <Select value={filtreClient} onValueChange={setFiltreClient}>
-                    <SelectTrigger className="w-44 h-8 text-xs rounded-xl">
-                      <SelectValue placeholder="Client"  >
-                        {(clients.find(c => String(c.id) === filtreClient))?.nom}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Tous clients</SelectItem>
-                      {clients.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.nom}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  <Select value={filtrePrio} onValueChange={setFiltrePrio}>
-                    <SelectTrigger className="w-32 h-8 text-xs rounded-xl"><SelectValue placeholder="Priorité" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Toutes</SelectItem>
-                      {["urgente", "haute", "normale"].map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  <span className="ml-auto text-xs text-slate-400">{dossiersFiltres.length} résultats</span>
-                </CardContent>
-              </Card>
-
-              {/* Grille dossiers */}
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {dossiersFiltres.map((d, i) => {
-                  const client = clients.find(c => c.id === d.clientId);
-                  const paye = totalPaye(d);
-                  const reste = resteApayer(d);
-                  const taux = tauxPaiement(d);
-                  const cidx = clients.findIndex(c => c.id === d.clientId);
-                  return (
-                    <Card key={d.id} className="rounded-2xl border-slate-100 shadow-sm hover:shadow-md transition-all cursor-pointer group" onClick={() => ouvrirDossier(d)}>
-                      <CardContent className="p-5">
-                        {/* Header card */}
-                        <div className="flex items-start justify-between mb-3">
-                          <div>
-                            <div className="flex items-center gap-2 flex-wrap mb-1">
-                              <span className="font-bold text-slate-800 text-sm group-hover:text-amber-600 transition-colors">{d.id}</span>
-                              <PriorityBadge priorite={d.priorite} />
-                            </div>
-                            <StatutBadge statut={d.statut} />
-                          </div>
-                          <AvatarCircle name={client?.nom || "?"} idx={cidx} size="w-9 h-9" text="text-xs" />
-                        </div>
-
-                        <p className="text-xs text-slate-500 mb-1 font-medium">{client?.nom}</p>
-                        <p className="text-sm text-slate-700 font-medium mb-1 leading-snug line-clamp-2">{d.description}</p>
-                        <p className="text-xs text-slate-400 mb-3">{d.type} · {d.port}</p>
-
-                        {/* Financier */}
-                        <div className="grid grid-cols-2 gap-2 mb-3">
-                          <div className="bg-slate-50 rounded-xl p-2.5">
-                            <p className="text-xs text-slate-400 mb-0.5">Total TTC</p>
-                            <p className="text-sm font-bold text-slate-800 tabular-nums">{(d.montantTotal / 1000).toFixed(0)}k</p>
-                          </div>
-                          <div className={`rounded-xl p-2.5 ${reste > 0 ? "bg-rose-50" : "bg-emerald-50"}`}>
-                            <p className={`text-xs mb-0.5 ${reste > 0 ? "text-rose-400" : "text-emerald-500"}`}>Reste à payer</p>
-                            <p className={`text-sm font-bold tabular-nums ${reste > 0 ? "text-rose-600" : "text-emerald-600"}`}>{reste > 0 ? (reste / 1000).toFixed(0) + "k" : "Soldé"}</p>
-                          </div>
-                        </div>
-
-                        {/* Barre paiement */}
-                        <div className="mb-3">
-                          <div className="flex justify-between text-xs text-slate-400 mb-1"><span>Encaissement</span><span className="font-semibold text-slate-600">{taux}%</span></div>
-                          <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                            <div className={`h-2 rounded-full transition-all ${taux >= 100 ? "bg-emerald-400" : taux > 50 ? "bg-amber-400" : "bg-rose-400"}`} style={{ width: `${taux}%` }} />
-                          </div>
-                        </div>
-
-                        {/* Footer */}
-                        <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-                          <div className="text-xs text-slate-400">📅 Éch. {d.dateEcheance}</div>
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              onClick={e => { e.stopPropagation(); if (window.confirm("Supprimer le dossier " + d.id + " ?")) supprimerDossier(d.id); }}
-                              className="text-xs p-1.5 rounded-lg text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-colors"
-                              title="Supprimer ce dossier">🗑</button>
-                            <button
-                              onClick={e => { e.stopPropagation(); setPaiementDossierId(d.id); setPaiementModal(true); }}
-                              disabled={reste <= 0}
-                              className={`text-xs font-semibold px-3 py-1 rounded-lg transition-colors ${reste > 0 ? "bg-amber-400 hover:bg-amber-500 text-slate-900" : "bg-slate-100 text-slate-400 cursor-not-allowed"}`}>
-                              {reste > 0 ? "+ Paiement" : "Soldé"}
-                            </button>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
+              {/* ── Toolbar filtres + view toggle ── */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-3 flex flex-wrap gap-2 items-center">
+                <Input placeholder="Rechercher…" className="w-40 h-8 text-xs rounded-xl" value={recherche} onChange={e => setRecherche(e.target.value)} />
+                <Select value={filtreStatut} onValueChange={setFiltreStatut}>
+                  <SelectTrigger className="w-36 h-8 text-xs rounded-xl"><SelectValue placeholder="Statut" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tous statuts</SelectItem>
+                    {Object.entries(STATUTS_DOSSIER).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={filtreClient} onValueChange={setFiltreClient}>
+                  <SelectTrigger className="w-40 h-8 text-xs rounded-xl"><SelectValue placeholder="Client" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tous clients</SelectItem>
+                    {clients.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.nom}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={filtrePrio} onValueChange={setFiltrePrio}>
+                  <SelectTrigger className="w-28 h-8 text-xs rounded-xl"><SelectValue placeholder="Priorité" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Toutes</SelectItem>
+                    {["urgente", "haute", "normale"].map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <span className="text-xs text-slate-400">{dossiersFiltres.length} résultats</span>
+                <div className="ml-auto flex items-center">
+                  <div className="flex bg-slate-100 rounded-xl p-1 gap-0.5">
+                    <button onClick={() => setDossierView("grid")} title="Vue grille"
+                      className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${dossierView === "grid" ? "bg-white shadow-sm text-slate-800" : "text-slate-400 hover:text-slate-600"}`}>
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
+                        <rect x="1" y="1" width="6" height="6" rx="1.5" />
+                        <rect x="9" y="1" width="6" height="6" rx="1.5" />
+                        <rect x="1" y="9" width="6" height="6" rx="1.5" />
+                        <rect x="9" y="9" width="6" height="6" rx="1.5" />
+                      </svg>
+                    </button>
+                    <button onClick={() => setDossierView("list")} title="Vue liste"
+                      className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${dossierView === "list" ? "bg-white shadow-sm text-slate-800" : "text-slate-400 hover:text-slate-600"}`}>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 16 16">
+                        <line x1="3" y1="4" x2="13" y2="4" /><line x1="3" y1="8" x2="13" y2="8" /><line x1="3" y1="12" x2="13" y2="12" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
               </div>
+
+              {/* ═══ VUE GRILLE ═══ */}
+              {dossierView === "grid" && (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {dossiersFiltres.length === 0 && (
+                    <div className="col-span-3 py-16 text-center text-slate-400">
+                      <p className="text-3xl mb-2">📁</p>
+                      <p className="font-medium">Aucun dossier trouvé</p>
+                    </div>
+                  )}
+                  {dossiersFiltres.map((d, i) => {
+                    const client = clients.find(c => c.id === d.clientId);
+                    const paye = totalPaye(d);
+                    const reste = resteApayer(d);
+                    const taux = tauxPaiement(d);
+                    const decaiss = totalDecaisse(d);
+                    const solde = soldeDecaisse(d);
+                    const cidx = clients.findIndex(c => c.id === d.clientId);
+                    return (
+                      <Card key={d.id} className="rounded-2xl border-slate-100 shadow-sm hover:shadow-md transition-all cursor-pointer group" onClick={() => ouvrirDossier(d)}>
+                        <CardContent className="p-5">
+                          <div className="flex items-start justify-between mb-3">
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap mb-1">
+                                <span className="font-bold text-slate-800 text-sm group-hover:text-amber-600 transition-colors">{d.id}</span>
+                                <PriorityBadge priorite={d.priorite} />
+                              </div>
+                              <StatutBadge statut={d.statut} />
+                            </div>
+                            <AvatarCircle name={client?.nom || "?"} idx={cidx} size="w-9 h-9" text="text-xs" />
+                          </div>
+                          <p className="text-xs text-slate-500 mb-0.5 font-medium">{client?.nom}</p>
+                          <p className="text-sm text-slate-700 font-medium mb-1 leading-snug line-clamp-2">{d.description}</p>
+                          <p className="text-xs text-slate-400 mb-3">{d.type} · {d.port}</p>
+                          {/* Financier 3 cols */}
+                          <div className="grid grid-cols-3 gap-1.5 mb-3">
+                            <div className="bg-slate-50 rounded-xl p-2">
+                              <p className="text-xs text-slate-400 mb-0.5 leading-tight">Facturé</p>
+                              <p className="text-xs font-bold text-slate-700 tabular-nums">{(d.montantTotal / 1000).toFixed(0)}k</p>
+                            </div>
+                            <div className="bg-rose-50 rounded-xl p-2">
+                              <p className="text-xs text-rose-400 mb-0.5 leading-tight">Décaissé</p>
+                              <p className="text-xs font-bold text-rose-600 tabular-nums">{(decaiss / 1000).toFixed(0)}k</p>
+                            </div>
+                            <div className={`rounded-xl p-2 ${solde >= 0 ? "bg-emerald-50" : "bg-orange-50"}`}>
+                              <p className={`text-xs mb-0.5 leading-tight ${solde >= 0 ? "text-emerald-500" : "text-orange-500"}`}>Solde</p>
+                              <p className={`text-xs font-bold tabular-nums ${solde >= 0 ? "text-emerald-600" : "text-orange-600"}`}>{solde >= 0 ? "+" : ""}{(solde / 1000).toFixed(0)}k</p>
+                            </div>
+                          </div>
+                          <div className="mb-3">
+                            <div className="flex justify-between text-xs text-slate-400 mb-1"><span>Encaissement</span><span className="font-semibold text-slate-600">{taux}%</span></div>
+                            <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                              <div className={`h-1.5 rounded-full transition-all ${taux >= 100 ? "bg-emerald-400" : taux > 50 ? "bg-amber-400" : "bg-rose-400"}`} style={{ width: `${taux}%` }} />
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                            <div className="text-xs text-slate-400">📅 {d.dateEcheance}</div>
+                            <div className="flex items-center gap-1.5">
+                              <button onClick={e => { e.stopPropagation(); if (window.confirm("Supprimer le dossier " + d.id + " ?")) supprimerDossier(d.id); }}
+                                className="text-xs p-1.5 rounded-lg text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-colors">🗑</button>
+                              <button onClick={e => { e.stopPropagation(); setPaiementDossierId(d.id); setPaiementModal(true); }}
+                                disabled={reste <= 0}
+                                className={`text-xs font-semibold px-2.5 py-1 rounded-lg transition-colors ${reste > 0 ? "bg-amber-400 hover:bg-amber-500 text-slate-900" : "bg-slate-100 text-slate-400 cursor-not-allowed"}`}>
+                                {reste > 0 ? "+ Paiement" : "Soldé"}
+                              </button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* ═══ VUE LISTE ═══ */}
+              {dossierView === "list" && (
+                <Card className="rounded-2xl border-slate-100 shadow-sm">
+                  <CardContent className="p-0">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-slate-50 border-slate-100">
+                          {["Dossier", "Client", "Type", "Statut", "Facturé", "Encaissé", "Décaissé", "Solde net", "Éch.", ""].map(h => (
+                            <TableHead key={h} className="text-xs font-semibold text-slate-400 uppercase tracking-wider first:pl-5 last:pr-4 py-3 whitespace-nowrap">{h}</TableHead>
+                          ))}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {dossiersFiltres.length === 0 && (
+                          <TableRow><TableCell colSpan={10} className="text-center py-10 text-slate-400">Aucun dossier</TableCell></TableRow>
+                        )}
+                        {dossiersFiltres.map((d, i) => {
+                          const client = clients.find(c => c.id === d.clientId);
+                          const paye = totalPaye(d);
+                          const reste = resteApayer(d);
+                          const decaiss = totalDecaisse(d);
+                          const solde = soldeDecaisse(d);
+                          const cidx = clients.findIndex(c => c.id === d.clientId);
+                          return (
+                            <TableRow key={d.id} className="border-slate-50 hover:bg-slate-50/60 cursor-pointer group" onClick={() => ouvrirDossier(d)}>
+                              <TableCell className="pl-5 py-3">
+                                <div>
+                                  <div className="flex items-center gap-1.5 mb-0.5">
+                                    <span className="text-xs font-bold text-slate-800">{d.id}</span>
+                                    <PriorityBadge priorite={d.priorite} />
+                                  </div>
+                                  <p className="text-xs text-slate-400 truncate max-w-[140px]">{d.description}</p>
+                                </div>
+                              </TableCell>
+                              <TableCell className="py-3">
+                                <div className="flex items-center gap-1.5">
+                                  <AvatarCircle name={client?.nom || "?"} idx={cidx} size="w-6 h-6" text="text-xs" />
+                                  <span className="text-xs text-slate-600 truncate max-w-[100px]">{client?.nom}</span>
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-xs text-slate-500 py-3 max-w-[100px] truncate">{d.type}</TableCell>
+                              <TableCell className="py-3"><StatutBadge statut={d.statut} /></TableCell>
+                              <TableCell className="text-sm font-semibold text-slate-800 tabular-nums py-3 text-right">{(d.montantTotal / 1000).toFixed(0)}k</TableCell>
+                              <TableCell className="text-sm font-semibold text-emerald-600 tabular-nums py-3 text-right">{(paye / 1000).toFixed(0)}k</TableCell>
+                              <TableCell className="text-sm font-semibold text-rose-500 tabular-nums py-3 text-right">{(decaiss / 1000).toFixed(0)}k</TableCell>
+                              <TableCell className={`text-sm font-bold tabular-nums py-3 text-right ${solde >= 0 ? "text-blue-600" : "text-orange-600"}`}>
+                                {solde >= 0 ? "+" : ""}{(solde / 1000).toFixed(0)}k
+                              </TableCell>
+                              <TableCell className="text-xs text-slate-400 py-3 whitespace-nowrap">{d.dateEcheance}</TableCell>
+                              <TableCell className="pr-4 py-3">
+                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button onClick={e => { e.stopPropagation(); setPaiementDossierId(d.id); setPaiementModal(true); }} disabled={reste <= 0}
+                                    className={`text-xs font-medium px-2 py-1 rounded-lg transition-colors whitespace-nowrap ${reste > 0 ? "bg-amber-50 hover:bg-amber-100 text-amber-700" : "bg-slate-50 text-slate-300 cursor-not-allowed"}`}>
+                                    {reste > 0 ? "Paiement" : "Soldé"}
+                                  </button>
+                                  <button onClick={e => { e.stopPropagation(); if (window.confirm("Supprimer ?")) supprimerDossier(d.id); }}
+                                    className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-rose-100 hover:text-rose-500 text-slate-400 flex items-center justify-center text-xs transition-colors">🗑</button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                    {dossiersFiltres.length > 0 && (
+                      <div className="flex justify-between items-center px-5 py-3 border-t border-slate-50 bg-slate-50/50 text-xs text-slate-400 flex-wrap gap-2">
+                        <span>{dossiersFiltres.length} dossier{dossiersFiltres.length > 1 ? "s" : ""}</span>
+                        <div className="flex gap-4 flex-wrap">
+                          <span>Facturé : <span className="font-semibold text-slate-700">{fmt(dossiersFiltres.reduce((s, d) => s + d.montantTotal, 0))}</span></span>
+                          <span>Encaissé : <span className="font-semibold text-emerald-600">{fmt(dossiersFiltres.reduce((s, d) => s + totalPaye(d), 0))}</span></span>
+                          <span>Décaissé : <span className="font-semibold text-rose-500">{fmt(dossiersFiltres.reduce((s, d) => s + totalDecaisse(d), 0))}</span></span>
+                          <span>Solde : <span className={`font-semibold ${dossiersFiltres.reduce((s, d) => s + soldeDecaisse(d), 0) >= 0 ? "text-blue-600" : "text-orange-600"}`}>{fmt(dossiersFiltres.reduce((s, d) => s + soldeDecaisse(d), 0))}</span></span>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
             </div>
           )}
 
@@ -1225,84 +1344,255 @@ export default function TransitaireDashboard() {
           })()}
 
           {/* ══════════ CLIENTS ══════════ */}
-          {vue === "clients" && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between flex-wrap gap-3">
-                <div>
-                  <h1 className="text-xl font-bold text-slate-900">Clients</h1>
-                  <p className="text-slate-400 text-sm">{clients.length} clients enregistrés</p>
+          {vue === "clients" && (() => {
+            const CLIENT_TYPES = ["Entreprise", "PME", "Particulier", "ONG", "Administration"];
+            const filteredClients = clients.filter(c => {
+              const q = clientSearch.toLowerCase();
+              const matchQ = !q || `${c.nom} ${c.contact} ${c.ville} ${c.ninea}`.toLowerCase().includes(q);
+              const matchT = clientTypeFilter === "all" || c.type === clientTypeFilter;
+              return matchQ && matchT;
+            });
+            const typeCount = CLIENT_TYPES.reduce((acc, t) => { acc[t] = clients.filter(c => c.type === t).length; return acc; }, {});
+
+            return (
+              <div className="space-y-4">
+
+                {/* ── Header ── */}
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div>
+                    <h1 className="text-xl font-bold text-slate-900">Clients</h1>
+                    <p className="text-slate-400 text-sm">{filteredClients.length} affiché(s) sur {clients.length}</p>
+                  </div>
+                  <button onClick={ouvrirNouveauClient}
+                    className="bg-amber-400 hover:bg-amber-500 text-slate-900 text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm">
+                    + Nouveau client
+                  </button>
                 </div>
-                <button onClick={ouvrirNouveauClient}
-                  className="bg-amber-400 hover:bg-amber-500 text-slate-900 text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm">
-                  + Nouveau client
-                </button>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {clients.map((c, i) => {
-                  const dossiersClient = dossiers.filter(d => d.clientId === c.id);
-                  const totalClient = dossiersClient.reduce((s, d) => s + d.montantTotal, 0);
-                  const payeClient = dossiersClient.reduce((s, d) => s + totalPaye(d), 0);
-                  const resteClient = totalClient - payeClient;
-                  const actifs = dossiersClient.filter(d => !["cloture", "annule"].includes(d.statut)).length;
-                  return (
-                    <Card key={c.id} className="rounded-2xl border-slate-100 shadow-sm hover:shadow-md transition-all group">
-                      <CardContent className="p-5">
-                        <div className="flex items-start gap-3 mb-4">
-                          <AvatarCircle name={c.nom} idx={i} size="w-11 h-11" text="text-sm" />
-                          <div className="flex-1 min-w-0">
-                            <p className="font-bold text-slate-800 text-sm leading-tight">{c.nom}</p>
-                            <p className="text-xs text-slate-500">{c.contact}</p>
-                            <Badge variant="outline" className="text-xs mt-1 rounded-lg">{c.type}</Badge>
-                          </div>
-                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => ouvrirEditerClient(c)}
-                              className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-blue-100 hover:text-blue-600 text-slate-400 flex items-center justify-center text-xs transition-colors"
-                              title="Modifier">✏️</button>
-                            <button onClick={() => supprimerClient(c.id)}
-                              className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-rose-100 hover:text-rose-600 text-slate-400 flex items-center justify-center text-xs transition-colors"
-                              title="Supprimer">🗑</button>
-                          </div>
-                        </div>
-                        <div className="space-y-1.5 text-xs mb-4">
-                          {[
-                            { icon: "📍", v: [c.ville, c.adresse].filter(Boolean).join(" — ") || "—" },
-                            { icon: "📞", v: c.tel || "—" },
-                            { icon: "✉", v: c.email || "—" },
-                            { icon: "🏛", v: `NINEA: ${c.ninea || "—"}` },
-                            ...(c.rc ? [{ icon: "📋", v: `RC: ${c.rc}` }] : []),
-                          ].map(r => (
-                            <div key={r.v} className="flex items-center gap-2 text-slate-500"><span>{r.icon}</span><span className="truncate">{r.v}</span></div>
-                          ))}
-                        </div>
-                        {c.note && <p className="text-xs text-slate-400 italic mb-3 border-l-2 border-slate-200 pl-2">{c.note}</p>}
-                        <div className="grid grid-cols-3 gap-2 pt-3 border-t border-slate-100">
-                          {[
-                            { label: "Dossiers", value: dossiersClient.length, color: "text-slate-800" },
-                            { label: "Actifs", value: actifs, color: "text-blue-600" },
-                            { label: "Reste", value: resteClient > 0 ? `${(resteClient / 1000).toFixed(0)}k` : "Soldé", color: resteClient > 0 ? "text-rose-500" : "text-emerald-600" },
-                          ].map(s => (
-                            <div key={s.label} className="text-center">
-                              <p className="text-xs text-slate-400 mb-0.5">{s.label}</p>
-                              <p className={`text-sm font-bold ${s.color}`}>{s.value}</p>
+
+                {/* ── Toolbar : search + type + view toggle ── */}
+                <div className="flex flex-wrap items-center gap-2 bg-white border border-slate-200 rounded-2xl p-3">
+                  {/* Search */}
+                  <div className="relative flex-1 min-w-[180px]">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">🔍</span>
+                    <input
+                      value={clientSearch}
+                      onChange={e => setClientSearch(e.target.value)}
+                      placeholder="Rechercher client, contact, NINEA…"
+                      className="w-full pl-8 pr-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:border-amber-400 bg-slate-50"
+                    />
+                  </div>
+
+                  <div className="w-px h-6 bg-slate-200 hidden sm:block" />
+
+                  {/* Type filter pills */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider shrink-0">Type :</span>
+                    <button onClick={() => setClientTypeFilter("all")}
+                      className={`text-xs font-semibold px-2.5 py-1 rounded-full border transition-all ${clientTypeFilter === "all" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-500 border-slate-200 hover:border-slate-400"}`}>
+                      Tous ({clients.length})
+                    </button>
+                    {CLIENT_TYPES.filter(t => typeCount[t] > 0).map(t => (
+                      <button key={t} onClick={() => setClientTypeFilter(clientTypeFilter === t ? "all" : t)}
+                        className={`text-xs font-semibold px-2.5 py-1 rounded-full border transition-all ${clientTypeFilter === t ? "bg-amber-400 text-slate-900 border-amber-400 shadow-sm" : "bg-white text-slate-500 border-slate-200 hover:border-amber-300 hover:text-amber-700"}`}>
+                        {t} <span className={`ml-0.5 ${clientTypeFilter === t ? "text-slate-700" : "text-slate-400"}`}>({typeCount[t]})</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="w-px h-6 bg-slate-200 hidden sm:block" />
+
+                  {/* Reset */}
+                  {(clientSearch || clientTypeFilter !== "all") && (
+                    <button onClick={() => { setClientSearch(""); setClientTypeFilter("all"); }}
+                      className="text-xs text-slate-400 hover:text-rose-500 font-medium transition-colors flex items-center gap-1">
+                      ✕ Réinitialiser
+                    </button>
+                  )}
+
+                  <div className="ml-auto flex items-center">
+                    <div className="flex bg-slate-100 rounded-xl p-1 gap-0.5">
+                      {/* Grid button */}
+                      <button onClick={() => setClientView("grid")} title="Vue grille"
+                        className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${clientView === "grid" ? "bg-white shadow-sm text-slate-800" : "text-slate-400 hover:text-slate-600"}`}>
+                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
+                          <rect x="1" y="1" width="6" height="6" rx="1.5" />
+                          <rect x="9" y="1" width="6" height="6" rx="1.5" />
+                          <rect x="1" y="9" width="6" height="6" rx="1.5" />
+                          <rect x="9" y="9" width="6" height="6" rx="1.5" />
+                        </svg>
+                      </button>
+                      {/* List button */}
+                      <button onClick={() => setClientView("list")} title="Vue liste"
+                        className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${clientView === "list" ? "bg-white shadow-sm text-slate-800" : "text-slate-400 hover:text-slate-600"}`}>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 16 16">
+                          <line x1="3" y1="4" x2="13" y2="4" />
+                          <line x1="3" y1="8" x2="13" y2="8" />
+                          <line x1="3" y1="12" x2="13" y2="12" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ═══ VUE GRILLE ═══ */}
+                {clientView === "grid" && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                    {filteredClients.length === 0 && (
+                      <div className="col-span-3 py-16 text-center">
+                        <p className="text-4xl mb-3">🔍</p>
+                        <p className="text-slate-500 font-medium mb-1">Aucun client trouvé</p>
+                        <button onClick={() => { setClientSearch(""); setClientTypeFilter("all"); }} className="text-xs text-amber-600 hover:underline mt-1">Réinitialiser les filtres</button>
+                      </div>
+                    )}
+                    {filteredClients.map((c, i) => {
+                      const cidx = clients.findIndex(x => x.id === c.id);
+                      const dossiersClient = dossiers.filter(d => d.clientId === c.id);
+                      const totalClient = dossiersClient.reduce((s, d) => s + d.montantTotal, 0);
+                      const payeClient = dossiersClient.reduce((s, d) => s + totalPaye(d), 0);
+                      const resteClient = totalClient - payeClient;
+                      const actifs = dossiersClient.filter(d => !["cloture", "annule"].includes(d.statut)).length;
+                      return (
+                        <Card key={c.id} className="rounded-2xl border-slate-100 shadow-sm hover:shadow-md transition-all group">
+                          <CardContent className="p-5">
+                            <div className="flex items-start gap-3 mb-4">
+                              <AvatarCircle name={c.nom} idx={cidx} size="w-11 h-11" text="text-sm" />
+                              <div className="flex-1 min-w-0">
+                                <p className="font-bold text-slate-800 text-sm leading-tight">{c.nom}</p>
+                                <p className="text-xs text-slate-500">{c.contact}</p>
+                                <Badge variant="outline" className="text-xs mt-1 rounded-lg">{c.type}</Badge>
+                              </div>
+                              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button onClick={() => ouvrirEditerClient(c)}
+                                  className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-blue-100 hover:text-blue-600 text-slate-400 flex items-center justify-center text-xs transition-colors" title="Modifier">✏️</button>
+                                <button onClick={() => supprimerClient(c.id)}
+                                  className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-rose-100 hover:text-rose-600 text-slate-400 flex items-center justify-center text-xs transition-colors" title="Supprimer">🗑</button>
+                              </div>
                             </div>
-                          ))}
+                            <div className="space-y-1.5 text-xs mb-4">
+                              {[
+                                { icon: "📍", v: [c.ville, c.adresse].filter(Boolean).join(" — ") || "—" },
+                                { icon: "📞", v: c.tel || "—" },
+                                { icon: "✉", v: c.email || "—" },
+                                { icon: "🏛", v: `NINEA: ${c.ninea || "—"}` },
+                                ...(c.rc ? [{ icon: "📋", v: `RC: ${c.rc}` }] : []),
+                              ].map(r => (
+                                <div key={r.v} className="flex items-center gap-2 text-slate-500"><span>{r.icon}</span><span className="truncate">{r.v}</span></div>
+                              ))}
+                            </div>
+                            {c.note && <p className="text-xs text-slate-400 italic mb-3 border-l-2 border-slate-200 pl-2">{c.note}</p>}
+                            <div className="grid grid-cols-3 gap-2 pt-3 border-t border-slate-100">
+                              {[
+                                { label: "Dossiers", value: dossiersClient.length, color: "text-slate-800" },
+                                { label: "Actifs", value: actifs, color: "text-blue-600" },
+                                { label: "Reste", value: resteClient > 0 ? `${(resteClient / 1000).toFixed(0)}k` : "Soldé", color: resteClient > 0 ? "text-rose-500" : "text-emerald-600" },
+                              ].map(s => (
+                                <div key={s.label} className="text-center">
+                                  <p className="text-xs text-slate-400 mb-0.5">{s.label}</p>
+                                  <p className={`text-sm font-bold ${s.color}`}>{s.value}</p>
+                                </div>
+                              ))}
+                            </div>
+                            <button onClick={() => { setFiltreClient(String(c.id)); setVue("dossiers"); }}
+                              className="mt-3 w-full text-xs text-slate-400 hover:text-amber-600 font-medium text-center pt-3 border-t border-slate-50 transition-colors">
+                              Voir les dossiers →
+                            </button>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* ═══ VUE LISTE ═══ */}
+                {clientView === "list" && (
+                  <Card className="rounded-2xl border-slate-100 shadow-sm">
+                    <CardContent className="p-0">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-slate-50 border-slate-100">
+                            {["Client", "Type", "Ville", "Téléphone", "NINEA", "Dossiers", "Reste", ""].map(h => (
+                              <TableHead key={h} className="text-xs font-semibold text-slate-400 uppercase tracking-wider first:pl-5 last:pr-4 py-3">{h}</TableHead>
+                            ))}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredClients.length === 0 && (
+                            <TableRow>
+                              <TableCell colSpan={8} className="text-center py-10 text-slate-400">Aucun client trouvé</TableCell>
+                            </TableRow>
+                          )}
+                          {filteredClients.map((c, i) => {
+                            const cidx = clients.findIndex(x => x.id === c.id);
+                            const dossiersClient = dossiers.filter(d => d.clientId === c.id);
+                            const totalClient = dossiersClient.reduce((s, d) => s + d.montantTotal, 0);
+                            const payeClient = dossiersClient.reduce((s, d) => s + totalPaye(d), 0);
+                            const resteClient = totalClient - payeClient;
+                            const actifs = dossiersClient.filter(d => !["cloture", "annule"].includes(d.statut)).length;
+                            return (
+                              <TableRow key={c.id} className="border-slate-50 hover:bg-slate-50/60 group">
+                                <TableCell className="pl-5 py-3">
+                                  <div className="flex items-center gap-2.5">
+                                    <AvatarCircle name={c.nom} idx={cidx} size="w-8 h-8" text="text-xs" />
+                                    <div className="min-w-0">
+                                      <p className="text-sm font-semibold text-slate-800 truncate">{c.nom}</p>
+                                      <p className="text-xs text-slate-400 truncate">{c.contact}</p>
+                                    </div>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="py-3">
+                                  <Badge variant="outline" className="text-xs rounded-lg whitespace-nowrap">{c.type}</Badge>
+                                </TableCell>
+                                <TableCell className="text-sm text-slate-600 py-3">{c.ville || "—"}</TableCell>
+                                <TableCell className="text-sm text-slate-600 font-mono py-3 whitespace-nowrap">{c.tel || "—"}</TableCell>
+                                <TableCell className="text-xs text-slate-500 font-mono py-3">{c.ninea || "—"}</TableCell>
+                                <TableCell className="py-3">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-sm font-bold text-slate-800">{dossiersClient.length}</span>
+                                    {actifs > 0 && <span className="text-xs text-blue-600 font-medium">({actifs} actifs)</span>}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="py-3">
+                                  <span className={`text-sm font-bold tabular-nums ${resteClient > 0 ? "text-rose-500" : "text-emerald-600"}`}>
+                                    {resteClient > 0 ? `${(resteClient / 1000).toFixed(0)}k FCFA` : "Soldé"}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="pr-4 py-3">
+                                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button onClick={() => { setFiltreClient(String(c.id)); setVue("dossiers"); }}
+                                      className="text-xs font-medium px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 transition-colors whitespace-nowrap">
+                                      Dossiers
+                                    </button>
+                                    <button onClick={() => ouvrirEditerClient(c)}
+                                      className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-blue-100 hover:text-blue-600 text-slate-400 flex items-center justify-center text-xs transition-colors">✏️</button>
+                                    <button onClick={() => supprimerClient(c.id)}
+                                      className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-rose-100 hover:text-rose-600 text-slate-400 flex items-center justify-center text-xs transition-colors">🗑</button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                      {filteredClients.length > 0 && (
+                        <div className="flex items-center justify-between px-5 py-3 border-t border-slate-50 bg-slate-50/50 text-xs text-slate-400">
+                          <span>{filteredClients.length} client{filteredClients.length > 1 ? "s" : ""}</span>
+                          <span>
+                            Total reste : <span className="font-semibold text-rose-500">
+                              {fmt(filteredClients.reduce((s, c) => s + (dossiers.filter(d => d.clientId === c.id).reduce((ss, d) => ss + resteApayer(d), 0)), 0))}
+                            </span>
+                          </span>
                         </div>
-                        <button
-                          onClick={() => { setFiltreClient(String(c.id)); setVue("dossiers"); }}
-                          className="mt-3 w-full text-xs text-slate-400 hover:text-amber-600 font-medium text-center pt-3 border-t border-slate-50 transition-colors">
-                          Voir les dossiers →
-                        </button>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* ══════════ CONFIGURATION ══════════ */}
           {vue === "configuration" && (
-            <div className="space-y-5">
+            <div className="space-y-5 max-w-4xl">
 
               {/* Header */}
               <div className="flex items-center justify-between flex-wrap gap-3">
@@ -1432,6 +1722,7 @@ export default function TransitaireDashboard() {
                 const ROLES_LIST = ["Administrateur", "Transitaire", "Agent douanier", "Comptable", "Commercial", "Directeur", "Stagiaire"];
                 const POSTES_LIST = ["Transitaire senior", "Transitaire", "Agent douanier", "Comptable", "Commercial", "DG", "DGA", "Secrétaire", "Chauffeur", "Coursier", "Stagiaire"];
                 const DEPT_LIST = ["Direction", "Transit", "Douane", "Finance", "Commercial", "Logistique", "RH", "Informatique"];
+
 
                 const filteredP = personnel.filter(p => {
                   const matchSearch = !searchP || `${p.prenom} ${p.nom} ${p.poste} ${p.role} ${p.dept}`.toLowerCase().includes(searchP.toLowerCase());
