@@ -130,6 +130,296 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 /* ═══════════════════════════════════════
+   PRINT SERVICE
+═══════════════════════════════════════ */
+function printHTML(html, title = "Impression") {
+  const win = window.open("", "_blank", "width=900,height=700");
+  win.document.write(`<!DOCTYPE html><html lang="fr"><head>
+    <meta charset="UTF-8">
+    <title>${title}</title>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap');
+      *{box-sizing:border-box;margin:0;padding:0;}
+      body{font-family:'Sora',sans-serif;font-size:11px;color:#1e293b;background:#fff;padding:20px;}
+      h1{font-size:20px;font-weight:700;margin-bottom:4px;}
+      h2{font-size:14px;font-weight:600;margin:18px 0 8px;color:#334155;}
+      .meta{font-size:10px;color:#64748b;margin-bottom:16px;}
+      .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:14px;border-bottom:2px solid #0f172a;}
+      .logo-box{display:flex;align-items:center;gap:10px;}
+      .logo{width:36px;height:36px;background:#f59e0b;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:900;color:#0f172a;}
+      .company-name{font-size:16px;font-weight:700;}
+      .company-sub{font-size:9px;color:#64748b;margin-top:2px;}
+      .print-date{font-size:10px;color:#94a3b8;text-align:right;}
+      table{width:100%;border-collapse:collapse;margin-bottom:14px;}
+      th{background:#0f172a;color:#fff;padding:6px 8px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;}
+      td{padding:5px 8px;border-bottom:1px solid #e2e8f0;vertical-align:middle;}
+      tr:nth-child(even) td{background:#f8fafc;}
+      .badge{display:inline-block;padding:1px 7px;border-radius:9999px;font-size:9px;font-weight:600;}
+      .badge-blue{background:#dbeafe;color:#1d4ed8;}
+      .badge-green{background:#dcfce7;color:#15803d;}
+      .badge-amber{background:#fef3c7;color:#b45309;}
+      .badge-rose{background:#ffe4e6;color:#be123c;}
+      .badge-violet{background:#ede9fe;color:#7c3aed;}
+      .badge-teal{background:#ccfbf1;color:#0f766e;}
+      .badge-orange{background:#ffedd5;color:#c2410c;}
+      .badge-gray{background:#f1f5f9;color:#475569;}
+      .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px;}
+      .kpi{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;}
+      .kpi-label{font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;}
+      .kpi-value{font-size:15px;font-weight:700;}
+      .kpi-green{color:#15803d;} .kpi-red{color:#be123c;} .kpi-blue{color:#1d4ed8;} .kpi-amber{color:#b45309;}
+      .section-card{border:1px solid #e2e8f0;border-radius:8px;margin-bottom:14px;overflow:hidden;}
+      .section-card-header{background:#f1f5f9;padding:7px 12px;font-size:11px;font-weight:600;color:#334155;border-bottom:1px solid #e2e8f0;}
+      .bar-wrap{display:flex;align-items:center;gap:8px;margin:4px 0;}
+      .bar-track{flex:1;height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden;}
+      .bar-fill{height:6px;border-radius:3px;}
+      .footer{margin-top:20px;padding-top:10px;border-top:1px solid #e2e8f0;font-size:9px;color:#94a3b8;display:flex;justify-content:space-between;}
+      .text-right{text-align:right;} .text-center{text-align:center;}
+      .nowrap{white-space:nowrap;}
+      .green{color:#15803d;font-weight:600;} .red{color:#be123c;font-weight:600;} .blue{color:#1d4ed8;font-weight:600;}
+      @media print{body{padding:0;} @page{margin:1.2cm;size:A4;}}
+    </style>
+  </head><body>${html}</body></html>`);
+  win.document.close();
+  setTimeout(() => { win.focus(); win.print(); }, 400);
+}
+
+function buildPageHeader(entreprise, title, subtitle) {
+  const now = new Date().toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" });
+  return `
+    <div class="header">
+      <div class="logo-box">
+        <div class="logo">T</div>
+        <div>
+          <div class="company-name">${entreprise.nom}</div>
+          <div class="company-sub">${entreprise.adresse} · ${entreprise.ville} · NINEA: ${entreprise.ninea}</div>
+        </div>
+      </div>
+      <div class="print-date"><strong>${title}</strong><br/>${subtitle}<br/>Imprimé le ${now}</div>
+    </div>
+  `;
+}
+
+function printTableClients(clients, dossiers, entreprise) {
+  const rows = clients.map((c, i) => {
+    const dos = dossiers.filter(d => d.clientId === c.id);
+    const total = dos.reduce((s, d) => s + d.montantTotal, 0);
+    const paye = dos.reduce((s, d) => d.paiements.reduce((ss, p) => ss + p.montant, 0) + s, 0);
+    const reste = total - paye;
+    const actifs = dos.filter(d => !["cloture", "annule"].includes(d.statut)).length;
+    const badgeCls = c.type === "Entreprise" ? "badge-blue" : c.type === "PME" ? "badge-amber" : "badge-gray";
+    return `<tr>
+      <td>${i + 1}</td>
+      <td><strong>${c.nom}</strong><br/><span style="color:#64748b;font-size:9px;">${c.contact}</span></td>
+      <td><span class="badge ${badgeCls}">${c.type}</span></td>
+      <td>${c.ville || "—"}</td>
+      <td class="nowrap">${c.tel || "—"}</td>
+      <td style="font-family:monospace;font-size:9px;">${c.ninea || "—"}</td>
+      <td class="text-center">${dos.length}</td>
+      <td class="text-center">${actifs}</td>
+      <td class="text-right">${total > 0 ? total.toLocaleString("fr-FR") + " FCFA" : "—"}</td>
+      <td class="text-right ${reste > 0 ? "red" : "green"}">${reste > 0 ? reste.toLocaleString("fr-FR") + " FCFA" : "Soldé"}</td>
+    </tr>`;
+  }).join("");
+
+  const totalGlobal = clients.reduce((s, c) => s + dossiers.filter(d => d.clientId === c.id).reduce((ss, d) => ss + d.montantTotal, 0), 0);
+  const payeGlobal = clients.reduce((s, c) => s + dossiers.filter(d => d.clientId === c.id).reduce((ss, d) => d.paiements.reduce((sss, p) => sss + p.montant, 0) + ss, 0), 0);
+
+  const html = `
+    ${buildPageHeader(entreprise, "Liste des Clients", clients.length + " clients enregistrés")}
+    <div class="kpi-grid">
+      <div class="kpi"><div class="kpi-label">Total clients</div><div class="kpi-value kpi-blue">${clients.length}</div></div>
+      <div class="kpi"><div class="kpi-label">Dossiers total</div><div class="kpi-value">${dossiers.length}</div></div>
+      <div class="kpi"><div class="kpi-label">Facturation totale</div><div class="kpi-value kpi-blue">${(totalGlobal / 1000000).toFixed(2)} M FCFA</div></div>
+      <div class="kpi"><div class="kpi-label">Reste à percevoir</div><div class="kpi-value kpi-red">${((totalGlobal - payeGlobal) / 1000000).toFixed(2)} M FCFA</div></div>
+    </div>
+    <table>
+      <thead><tr>
+        <th>#</th><th>Client / Contact</th><th>Type</th><th>Ville</th><th>Téléphone</th>
+        <th>NINEA</th><th>Dossiers</th><th>Actifs</th><th class="text-right">Facturé</th><th class="text-right">Reste</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="footer"><span>© ${entreprise.nom} — Document confidentiel</span><span>Page 1/1</span></div>
+  `;
+  printHTML(html, "Liste des Clients — " + entreprise.nom);
+}
+
+function printTableDossiers(dossiers, clients, entreprise, statuts) {
+  const rows = dossiers.map((d, i) => {
+    const client = clients.find(c => c.id === d.clientId);
+    const paye = d.paiements.reduce((s, p) => s + p.montant, 0);
+    const reste = d.montantTotal - paye;
+    const decaiss = (d.decaissements || []).reduce((s, x) => s + x.montant, 0);
+    const solde = paye - decaiss;
+    const st = statuts[d.statut];
+    const stClsMap = { nouveau: "badge-blue", en_cours: "badge-amber", attente_doc: "badge-violet", douane: "badge-orange", livraison: "badge-teal", cloture: "badge-green", annule: "badge-rose" };
+    const prioMap = { urgente: "badge-rose", haute: "badge-orange", normale: "badge-gray" };
+    return `<tr>
+      <td style="font-family:monospace;font-size:9px;">${d.id}</td>
+      <td>${client?.nom || "—"}<br/><span style="color:#64748b;font-size:9px;">${d.type}</span></td>
+      <td style="font-size:9px;max-width:120px;overflow:hidden;">${d.description}</td>
+      <td><span class="badge ${stClsMap[d.statut] || "badge-gray"}">${st?.label || d.statut}</span></td>
+      <td><span class="badge ${prioMap[d.priorite] || "badge-gray"}">${d.priorite}</span></td>
+      <td class="text-right">${d.montantTotal.toLocaleString("fr-FR")}</td>
+      <td class="text-right green">${paye.toLocaleString("fr-FR")}</td>
+      <td class="text-right red">${decaiss.toLocaleString("fr-FR")}</td>
+      <td class="text-right ${solde >= 0 ? "green" : "red"}">${solde >= 0 ? "+" : ""}${solde.toLocaleString("fr-FR")}</td>
+      <td class="nowrap">${d.dateEcheance || "—"}</td>
+    </tr>`;
+  }).join("");
+
+  const totFact = dossiers.reduce((s, d) => s + d.montantTotal, 0);
+  const totPaye = dossiers.reduce((s, d) => s + d.paiements.reduce((ss, p) => ss + p.montant, 0), 0);
+  const totDecaiss = dossiers.reduce((s, d) => s + (d.decaissements || []).reduce((ss, x) => ss + x.montant, 0), 0);
+  const totSolde = totPaye - totDecaiss;
+
+  const html = `
+    ${buildPageHeader(entreprise, "Liste des Dossiers", dossiers.length + " dossier(s)")}
+    <div class="kpi-grid">
+      <div class="kpi"><div class="kpi-label">Total facturé</div><div class="kpi-value">${(totFact / 1000000).toFixed(2)} M FCFA</div></div>
+      <div class="kpi"><div class="kpi-label">Encaissé</div><div class="kpi-value kpi-green">${(totPaye / 1000000).toFixed(2)} M FCFA</div></div>
+      <div class="kpi"><div class="kpi-label">Décaissé</div><div class="kpi-value kpi-red">${(totDecaiss / 1000000).toFixed(2)} M FCFA</div></div>
+      <div class="kpi"><div class="kpi-label">Solde net</div>
+      <div class="kpi-value ${totSolde >= 0 ? "kpi-blue" : "kpi-red"}">${totSolde >= 0 ? "+" : ""} ${(totSolde / 1000000).toFixed(2)} M FCFA</div></div>
+    </div>
+    <table>
+      <thead><tr>
+        <th>N° Dossier</th><th>Client / Type</th><th>Description</th><th>Statut</th><th>Priorité</th>
+        <th class="text-right">Facturé</th><th class="text-right">Encaissé</th><th class="text-right">Décaissé</th><th class="text-right">Solde net</th><th>Échéance</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+      <tr style="background:#0f172a;color:#fff;font-weight:700;">
+        <td colspan="5">TOTAUX</td>
+        <td class="text-right">${totFact.toLocaleString("fr-FR")}</td>
+        <td class="text-right">${totPaye.toLocaleString("fr-FR")}</td>
+        <td class="text-right">${totDecaiss.toLocaleString("fr-FR")}</td>
+        <td class="text-right">${totSolde >= 0 ? "+" : ""}${totSolde.toLocaleString("fr-FR")}</td>
+        <td></td>
+      </tr>
+    </table>
+    <div class="footer"><span>© ${entreprise.nom} — Document confidentiel</span><span>Page 1/1</span></div>
+  `;
+  printHTML(html, "Liste des Dossiers — " + entreprise.nom);
+}
+
+function printRapportAnnuel(dossiers, clients, entreprise, statuts) {
+  const annee = new Date().getFullYear();
+  const totFact = dossiers.reduce((s, d) => s + d.montantTotal, 0);
+  const totPaye = dossiers.reduce((s, d) => s + d.paiements.reduce((ss, p) => ss + p.montant, 0), 0);
+  const totDecaiss = dossiers.reduce((s, d) => s + (d.decaissements || []).reduce((ss, x) => ss + x.montant, 0), 0);
+  const soldeNet = totPaye - totDecaiss;
+  const reste = totFact - totPaye;
+  const clotures = dossiers.filter(d => d.statut === "cloture").length;
+  const actifs = dossiers.filter(d => !["cloture", "annule"].includes(d.statut)).length;
+
+  // By status
+  const statRows = Object.entries(statuts).map(([k, v]) => {
+    const count = dossiers.filter(d => d.statut === k).length;
+    const mt = dossiers.filter(d => d.statut === k).reduce((s, d) => s + d.montantTotal, 0);
+    if (!count) return "";
+    const stClsMap = { nouveau: "badge-blue", en_cours: "badge-amber", attente_doc: "badge-violet", douane: "badge-orange", livraison: "badge-teal", cloture: "badge-green", annule: "badge-rose" };
+    const pct = dossiers.length ? Math.round(count / dossiers.length * 100) : 0;
+    return `<tr>
+      <td><span class="badge ${stClsMap[k] || "badge-gray"}">${v.label}</span></td>
+      <td class="text-center">${count}</td>
+      <td class="text-center">${pct}%</td>
+      <td class="text-right">${mt.toLocaleString("fr-FR")} FCFA</td>
+      <td>
+        <div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:#f59e0b;"></div></div><span>${pct}%</span></div>
+      </td>
+    </tr>`;
+  }).join("");
+
+  // Top clients
+  const topClients = clients.map(c => {
+    const dos = dossiers.filter(d => d.clientId === c.id);
+    const total = dos.reduce((s, d) => s + d.montantTotal, 0);
+    const paye = dos.reduce((s, d) => s + d.paiements.reduce((ss, p) => ss + p.montant, 0), 0);
+    return { nom: c.nom, ville: c.ville || "—", total, paye, count: dos.length };
+  }).filter(c => c.total > 0).sort((a, b) => b.total - a.total).slice(0, 8);
+
+  const topRows = topClients.map((c, i) => {
+    const pct = totFact ? Math.round(c.total / totFact * 100) : 0;
+    return `<tr>
+      <td>${i + 1}</td>
+      <td><strong>${c.nom}</strong></td>
+      <td class="text-center">${c.count}</td>
+      <td class="text-right">${c.total.toLocaleString("fr-FR")} FCFA</td>
+      <td class="text-right green">${c.paye.toLocaleString("fr-FR")} FCFA</td>
+      <td class="text-right red">${(c.total - c.paye).toLocaleString("fr-FR")} FCFA</td>
+      <td>${pct}% du CA</td>
+    </tr>`;
+  }).join("");
+
+  // Decaissement by category
+  const catTotals = {};
+  dossiers.forEach(d => (d.decaissements || []).forEach(x => { catTotals[x.categorie] = (catTotals[x.categorie] || 0) + x.montant; }));
+  const catRows = Object.entries(catTotals).sort((a, b) => b[1] - a[1]).map(([k, v]) => {
+    const pct = totDecaiss ? Math.round(v / totDecaiss * 100) : 0;
+    return `<tr><td>${k}</td><td class="text-right">${v.toLocaleString("fr-FR")} FCFA</td>
+      <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:#ef4444;"></div></div>${pct}%</div></td></tr>`;
+  }).join("") || "<tr><td colspan='3' style='color:#94a3b8;text-align:center'>Aucun décaissement</td></tr>";
+
+  const html = `
+    ${buildPageHeader(entreprise, "Rapport Annuel " + annee, "Synthèse complète de l'activité transitaire")}
+
+    <h2>📊 Indicateurs clés de performance</h2>
+    <div class="kpi-grid">
+      <div class="kpi"><div class="kpi-label">Chiffre d'affaires</div><div class="kpi-value kpi-blue">${(totFact / 1000000).toFixed(2)} M FCFA</div></div>
+      <div class="kpi"><div class="kpi-label">Encaissements</div><div class="kpi-value kpi-green">${(totPaye / 1000000).toFixed(2)} M FCFA</div></div>
+      <div class="kpi"><div class="kpi-label">Décaissements</div><div class="kpi-value kpi-red">${(totDecaiss / 1000000).toFixed(2)} M FCFA</div></div>
+      <div class="kpi"><div class="kpi-label">Solde net</div><div class="kpi-value ${soldeNet >= 0 ? "kpi-blue" : "kpi-red"}">${soldeNet >= 0 ? "+" : ""}${(soldeNet / 1000000).toFixed(2)} M FCFA</div></div>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi"><div class="kpi-label">Reste à percevoir</div><div class="kpi-value kpi-amber">${(reste / 1000000).toFixed(2)} M FCFA</div></div>
+      <div class="kpi"><div class="kpi-label">Total dossiers</div><div class="kpi-value">${dossiers.length}</div></div>
+      <div class="kpi"><div class="kpi-label">Dossiers actifs</div><div class="kpi-value kpi-blue">${actifs}</div></div>
+      <div class="kpi"><div class="kpi-label">Dossiers clôturés</div><div class="kpi-value kpi-green">${clotures}</div></div>
+    </div>
+
+    <h2>📁 Répartition par statut des dossiers</h2>
+    <table>
+      <thead><tr><th>Statut</th><th class="text-center">Nb</th><th class="text-center">%</th><th class="text-right">Montant</th><th>Répartition</th></tr></thead>
+      <tbody>${statRows}</tbody>
+    </table>
+
+    <h2>🏆 Top clients par chiffre d'affaires</h2>
+    <table>
+      <thead><tr><th>#</th><th>Client</th><th class="text-center">Dossiers</th><th class="text-right">Facturé</th><th class="text-right">Encaissé</th><th class="text-right">Reste</th><th>Part CA</th></tr></thead>
+      <tbody>${topRows}</tbody>
+    </table>
+
+    <h2>💸 Répartition des décaissements par catégorie</h2>
+    <table>
+      <thead><tr><th>Catégorie</th><th class="text-right">Montant</th><th>Proportion</th></tr></thead>
+      <tbody>${catRows}</tbody>
+      ${totDecaiss > 0 ? "<tr style='font-weight:700;background:#fef2f2;'><td>TOTAL</td><td class='text-right'>" + totDecaiss.toLocaleString("fr-FR") + " FCFA</td><td></td></tr>" : ""}
+    </table>
+
+    <h2>📋 Synthèse financière</h2>
+    <table>
+      <tbody>
+        <tr><td><strong>Chiffre d'affaires (facturé)</strong></td><td class="text-right">${totFact.toLocaleString("fr-FR")} FCFA</td></tr>
+        <tr><td>Encaissements reçus</td><td class="text-right green">${totPaye.toLocaleString("fr-FR")} FCFA</td></tr>
+        <tr><td>Reste à encaisser</td><td class="text-right red">${reste.toLocaleString("fr-FR")} FCFA</td></tr>
+        <tr><td>Total décaissements</td><td class="text-right red">(${totDecaiss.toLocaleString("fr-FR")} FCFA)</td></tr>
+        <tr style="background:#f8fafc;font-weight:700;border-top:2px solid #0f172a;">
+          <td><strong>Solde net (Enc. − Déc.)</strong></td>
+          <td class="text-right ${soldeNet >= 0 ? "green" : "red"}">${soldeNet >= 0 ? "+" : ""}${soldeNet.toLocaleString("fr-FR")} FCFA</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="footer">
+      <span>© ${annee} ${entreprise.nom} · NINEA: ${entreprise.ninea} · RC: ${entreprise.rc || "—"} · Agrément DGD: ${entreprise.agrement || "—"}</span>
+      <span>Rapport généré le ${new Date().toLocaleDateString("fr-FR")} — Document confidentiel</span>
+    </div>
+  `;
+  printHTML(html, "Rapport Annuel " + annee + " — " + entreprise.nom);
+}
+
+/* ═══════════════════════════════════════
    USERS DATABASE
 ═══════════════════════════════════════ */
 const USERS_DB = [
@@ -317,6 +607,7 @@ function LoginPage({ onLogin }) {
 ═══════════════════════════════════════ */
 export default function TransitaireDashboard() {
   const [authUser, setAuthUser] = useState(null); // null = logged out
+  const isAdmin = authUser?.role === "Administrateur"; // true = full access
   const [dossiers, setDossiers] = useState(DOSSIERS_INIT);
   const [clients, setClients] = useState(CLIENTS_INIT);
   const [vue, setVue] = useState("dashboard"); // dashboard | dossiers | clients | dossier_detail
@@ -326,8 +617,31 @@ export default function TransitaireDashboard() {
   const [clientView, setClientView] = useState("grid"); // "grid" | "list"
   const [clientSearch, setClientSearch] = useState("");
   const [clientTypeFilter, setClientTypeFilter] = useState("all");
+  const [darkMode, setDarkMode] = useState(false);
+  const [showSolde, setShowSolde] = useState(true);
 
   // Config app
+  const EMPTY_CAT_FORM = { key: "", label: "", icon: "💸", color: "text-slate-600", bg: "bg-slate-50", border: "border-slate-200" };
+  const [catForm, setCatForm] = useState(EMPTY_CAT_FORM);
+  const [catFormErr, setCatFormErr] = useState({});
+  const [editIdx, setEditIdx] = useState(null); // null = add, number = edit
+
+  const EMPTY_PERS = { id: null, prenom: "", nom: "", poste: "", role: "Transitaire", dept: "Transit", tel: "", email: "", avatar: "", password: "", adresse: "", dateEmbauche: "", actif: true, note: "" };
+
+  const [personnel, setPersonnel] = useState(USERS_DB.map(u => ({
+    ...u, dept: "Transit", adresse: "", dateEmbauche: "", note: "",
+  })));
+  const [form, setForm] = useState(EMPTY_PERS);
+  const [editId, setEditId] = useState(null);
+  const [errors, setErrors] = useState({});
+  const [showForm, setShowForm] = useState(false);
+  const [searchP, setSearchP] = useState("");
+  const [filterRole, setFilterRole] = useState("all");
+  const [filterDept, setFilterDept] = useState("all");
+  const [filterActif, setFilterActif] = useState("all"); // "all" | "actif" | "inactif"
+
+  const [selectedRole, setSelectedRole] = useState("Transitaire");
+
   const [config, setConfig] = useState({
     entreprise: {
       nom: "TransitPro SARL",
@@ -369,6 +683,49 @@ export default function TransitaireDashboard() {
     categoriesDecaiss: [...CATEGORIES_DECAISSEMENT],
     typesPrestation: [...TYPES_PRESTATION],
     modesPaiement: [...MODES_PAIEMENT],
+    rolePermissions: {
+      "Administrateur": [
+        "dossier.read", "dossier.write", "dossier.delete",
+        "client.read", "client.write", "client.delete",
+        "paiement.read", "paiement.write", "paiement.delete",
+        "decaissement.read", "decaissement.write", "decaissement.delete",
+        "config.read", "config.write",
+        "solde.view", "personnel.manage",
+      ],
+      "Transitaire": [
+        "dossier.read", "dossier.write",
+        "client.read", "client.write",
+        "paiement.read", "paiement.write",
+        "decaissement.read", "decaissement.write",
+      ],
+      "Agent douanier": [
+        "dossier.read",
+        "client.read",
+        "decaissement.read", "decaissement.write",
+      ],
+      "Comptable": [
+        "dossier.read",
+        "client.read",
+        "paiement.read", "paiement.write",
+        "decaissement.read",
+        "solde.view",
+      ],
+      "Commercial": [
+        "dossier.read", "dossier.write",
+        "client.read", "client.write",
+      ],
+      "Directeur": [
+        "dossier.read", "dossier.write", "dossier.delete",
+        "client.read", "client.write", "client.delete",
+        "paiement.read", "paiement.write",
+        "decaissement.read",
+        "solde.view",
+      ],
+      "Stagiaire": [
+        "dossier.read",
+        "client.read",
+      ],
+    },
   });
   const [configTab, setConfigTab] = useState("entreprise");
   const [configSaved, setConfigSaved] = useState(false);
@@ -379,25 +736,13 @@ export default function TransitaireDashboard() {
   };
   const setConf = (section, key, val) => setConfig(c => ({ ...c, [section]: { ...c[section], [key]: val } }));
 
-  const [personnel, setPersonnel] = useState(USERS_DB.map(u => ({
-    ...u, dept: "Transit", adresse: "", dateEmbauche: "", note: "",
-  })));
-  const EMPTY_PERS = { id: null, prenom: "", nom: "", poste: "", role: "Transitaire", dept: "Transit", tel: "", email: "", avatar: "", password: "", adresse: "", dateEmbauche: "", actif: true, note: "" };
-  const [form, setForm] = useState(EMPTY_PERS);
-  const [editId, setEditId] = useState(null);
-  const [errors, setErrors] = useState({});
-  const [showForm, setShowForm] = useState(false);
-  const [searchP, setSearchP] = useState("");
-  const [filterRole, setFilterRole] = useState("all");
-  const [filterDept, setFilterDept] = useState("all");
-  const [filterActif, setFilterActif] = useState("all"); // "all" | "actif" | "inactif"
-  
-  const EMPTY_CAT_FORM = { key: "", label: "", icon: "💸", color: "text-slate-600", bg: "bg-slate-50", border: "border-slate-200" };
-  const [catForm, setCatForm] = useState(EMPTY_CAT_FORM);
-  const [catFormErr, setCatFormErr] = useState({});
-  const [editIdx, setEditIdx] = useState(null); // null = add, number = edit
-
-
+  // Permission checker — uses config.rolePermissions for non-admin, always true for admin
+  const hasPermission = (perm) => {
+    if (!authUser) return false;
+    if (authUser.role === "Administrateur") return true;
+    const perms = config.rolePermissions[authUser.role] || [];
+    return perms.includes(perm);
+  };
 
   // Filtres dossiers
   const [filtreStatut, setFiltreStatut] = useState("all");
@@ -579,14 +924,14 @@ export default function TransitaireDashboard() {
   if (!authUser) return <LoginPage onLogin={(user) => setAuthUser(user)} />;
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans">
+    <div className={`min-h-screen font-sans transition-colors duration-300 ${darkMode ? "bg-slate-950" : "bg-slate-50"}`}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap');*{font-family:'Sora',sans-serif;}`}</style>
 
       {/* ══ SIDEBAR + HEADER layout ══ */}
       <div className="flex">
 
         {/* ── Sidebar fixed ── */}
-        <aside className="w-56 h-screen bg-slate-900 flex flex-col hidden md:flex shrink-0 fixed top-0 left-0 z-30 overflow-y-auto">
+        <aside className={`w-56 h-screen flex flex-col hidden md:flex shrink-0 fixed top-0 left-0 z-30 overflow-y-auto transition-colors duration-300 ${darkMode ? "bg-black border-r border-slate-800" : "bg-slate-900"}`}>
           <div className="px-5 py-5 border-b border-slate-800">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 bg-amber-400 rounded-lg flex items-center justify-center shrink-0">
@@ -599,12 +944,19 @@ export default function TransitaireDashboard() {
             </div>
           </div>
           <nav className="flex-1 px-3 py-4 space-y-1">
+            {/* Role badge */}
+            <div className="mb-2 px-1">
+              <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${isAdmin ? "bg-amber-400/20 text-amber-300" : "bg-slate-700 text-slate-400"}`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${isAdmin ? "bg-amber-400" : "bg-slate-500"}`} />
+                {authUser?.role}
+              </span>
+            </div>
             {[
-              { key: "dashboard", icon: "⊞", label: "Tableau de bord" },
-              { key: "dossiers", icon: "📁", label: "Dossiers" },
-              { key: "clients", icon: "👥", label: "Clients" },
-              { key: "configuration", icon: "⚙️", label: "Configuration" },
-            ].map(n => (
+              { key: "dashboard", icon: "⊞", label: "Tableau de bord", adminOnly: false },
+              { key: "dossiers", icon: "📁", label: "Dossiers", adminOnly: false },
+              { key: "clients", icon: "👥", label: "Clients", adminOnly: false },
+              { key: "configuration", icon: "⚙️", label: "Configuration", adminOnly: true },
+            ].filter(n => !n.adminOnly || isAdmin).map(n => (
               <button key={n.key} onClick={() => setVue(n.key)}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all ${vue === n.key || (vue === "dossier_detail" && n.key === "dossiers")
                   ? "bg-amber-400 text-slate-900 font-semibold shadow-sm"
@@ -618,26 +970,36 @@ export default function TransitaireDashboard() {
           <div className="px-4 py-4 border-t border-slate-800">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 min-w-0">
-                <div className="w-7 h-7 bg-amber-400 rounded-lg flex items-center justify-center text-xs text-slate-900 font-bold shrink-0">{authUser.avatar}</div>
+                <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${isAdmin ? "bg-amber-400 text-slate-900" : "bg-slate-700 text-slate-300"}`}>{authUser.avatar}</div>
                 <div className="min-w-0">
-                  <p className="text-white text-xs font-medium truncate">{authUser.prenom} {authUser.nom}</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-white text-xs font-medium truncate">{authUser.prenom}</p>
+                    {isAdmin && <span className="text-xs font-bold px-1.5 py-0.5 rounded-md bg-amber-400/20 text-amber-300 shrink-0">ADM</span>}
+                  </div>
                   <p className="text-slate-500 text-xs truncate">{authUser.role}</p>
                 </div>
               </div>
-              <button
-                onClick={() => { if (window.confirm("Se déconnecter ?")) setAuthUser(null); }}
-                className="text-slate-500 hover:text-amber-400 transition-colors text-xs shrink-0"
-                title="Déconnexion">⏻</button>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setDarkMode(d => !d)}
+                  className="text-slate-500 hover:text-amber-400 transition-colors text-sm shrink-0"
+                  title={darkMode ? "Mode clair" : "Mode sombre"}>
+                  {darkMode ? "☀️" : "🌙"}
+                </button>
+                <button
+                  onClick={() => { if (window.confirm("Se déconnecter ?")) setAuthUser(null); }}
+                  className="text-slate-500 hover:text-amber-400 transition-colors text-xs shrink-0"
+                  title="Déconnexion">⏻</button>
+              </div>
             </div>
           </div>
         </aside>
 
         {/* ── Main (offset for fixed sidebar) ── */}
-        <div className="flex-1 min-w-0 p-4 md:p-6 space-y-5 md:ml-56">
+        <div className={`flex-1 min-w-0 p-4 md:p-6 space-y-5 md:ml-56 min-h-screen transition-colors duration-300 ${darkMode ? "bg-slate-950" : ""}`}>
 
           {/* Mobile nav */}
           <div className="flex md:hidden gap-2 mb-2">
-            {[{ key: "dashboard", label: "Dashboard" }, { key: "dossiers", label: "Dossiers" }, { key: "clients", label: "Clients" }, { key: "configuration", label: "Config" }].map(n => (
+            {[{ key: "dashboard", label: "Dashboard", admin: false }, { key: "dossiers", label: "Dossiers", admin: false }, { key: "clients", label: "Clients", admin: false }, { key: "configuration", label: "Config", admin: true }].filter(n => !n.admin || isAdmin).map(n => (
               <button key={n.key} onClick={() => setVue(n.key)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${vue === n.key ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200"}`}>
                 {n.label}
@@ -650,13 +1012,47 @@ export default function TransitaireDashboard() {
             <div className="space-y-5">
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
-                  <h1 className="text-xl font-bold text-slate-900">Tableau de bord</h1>
+                  <h1 className={`text-xl font-bold ${darkMode ? "text-white" : "text-slate-900"}`}>Tableau de bord</h1>
                   <p className="text-slate-400 text-sm">Activité transitaire — Avril 2026</p>
                 </div>
-                <button onClick={() => setNouveauDossierModal(true)}
-                  className="bg-amber-400 hover:bg-amber-500 text-slate-900 text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm">
-                  + Nouveau dossier
-                </button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Show/Hide solde button — admin only */}
+                  {isAdmin && <button onClick={() => setShowSolde(s => !s)}
+                    className={`flex items-center gap-2 text-xs font-semibold px-3 py-2 rounded-xl border transition-all ${showSolde ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"} ${darkMode ? "!bg-slate-800 !text-slate-200 !border-slate-700" : ""}`}
+                    title={showSolde ? "Masquer les soldes" : "Afficher les soldes"}>
+                    {showSolde ? (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" />
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" />
+                      </svg>
+                    )}
+                    {showSolde ? "Masquer soldes" : "Afficher soldes"}
+                  </button>}
+                  {/* Dark/Light mode toggle */}
+                  <button onClick={() => setDarkMode(d => !d)}
+                    className={`flex items-center gap-2 text-xs font-semibold px-3 py-2 rounded-xl border transition-all ${darkMode ? "bg-amber-400 text-slate-900 border-amber-400" : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"}`}
+                    title={darkMode ? "Mode clair" : "Mode sombre"}>
+                    {darkMode ? (
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v1m0 16v1M4.22 4.22l.71.71m12.73 12.73.71.71M3 12h1m16 0h1M4.22 19.78l.71-.71M18.36 5.64l.71-.71M12 7a5 5 0 100 10A5 5 0 0012 7z" /></svg>
+                    ) : (
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" /></svg>
+                    )}
+                    {darkMode ? "Mode clair" : "Mode sombre"}
+                  </button>
+                  <button
+                    onClick={() => printRapportAnnuel(dossiers, clients, config.entreprise, STATUTS_DOSSIER)}
+                    className="flex items-center gap-2 text-xs font-semibold px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 transition-colors">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                    Rapport annuel
+                  </button>
+                  <button onClick={() => setNouveauDossierModal(true)}
+                    className="bg-amber-400 hover:bg-amber-500 text-slate-900 text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm">
+                    + Nouveau dossier
+                  </button>
+                </div>
               </div>
 
               {/* KPI Row 1 — Financier */}
@@ -674,7 +1070,7 @@ export default function TransitaireDashboard() {
                         <p className="text-xs font-semibold text-slate-500 leading-tight">{k.label}</p>
                         <span className={`text-xs font-bold w-6 h-6 rounded-lg flex items-center justify-center ${k.color} bg-white/60`}>{k.icon}</span>
                       </div>
-                      <p className={`text-xl font-black ${k.color} leading-tight tabular-nums`}>{k.value}</p>
+                      <p className={`text-xl font-black ${k.color} leading-tight tabular-nums`}>{(isAdmin && showSolde) ? k.value : "••••••"}</p>
                       <p className="text-xs text-slate-400 mt-0.5">{k.sub}</p>
                     </CardContent>
                   </Card>
@@ -789,10 +1185,18 @@ export default function TransitaireDashboard() {
                   <h1 className="text-xl font-bold text-slate-900">Dossiers</h1>
                   <p className="text-slate-400 text-sm">{dossiers.length} dossiers au total</p>
                 </div>
-                <button onClick={() => setNouveauDossierModal(true)}
-                  className="bg-amber-400 hover:bg-amber-500 text-slate-900 text-sm font-bold px-4 py-2 rounded-xl transition-colors">
-                  + Nouveau dossier
+                <button
+                  onClick={() => printTableDossiers(dossiersFiltres, clients, config.entreprise, STATUTS_DOSSIER)}
+                  className="flex items-center gap-2 text-xs font-semibold px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 transition-colors">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z" /></svg>
+                  Imprimer dossiers
                 </button>
+                {hasPermission("dossier.write") && (
+                  <button onClick={() => setNouveauDossierModal(true)}
+                    className="bg-amber-400 hover:bg-amber-500 text-slate-900 text-sm font-bold px-4 py-2 rounded-xl transition-colors">
+                    + Nouveau dossier
+                  </button>
+                )}
               </div>
 
               {/* ── Toolbar filtres + view toggle ── */}
@@ -898,8 +1302,8 @@ export default function TransitaireDashboard() {
                           <div className="flex items-center justify-between pt-3 border-t border-slate-100">
                             <div className="text-xs text-slate-400">📅 {d.dateEcheance}</div>
                             <div className="flex items-center gap-1.5">
-                              <button onClick={e => { e.stopPropagation(); if (window.confirm("Supprimer le dossier " + d.id + " ?")) supprimerDossier(d.id); }}
-                                className="text-xs p-1.5 rounded-lg text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-colors">🗑</button>
+                              {hasPermission("dossier.delete") && <button onClick={e => { e.stopPropagation(); if (window.confirm("Supprimer le dossier " + d.id + " ?")) supprimerDossier(d.id); }}
+                                className="text-xs p-1.5 rounded-lg text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-colors">🗑</button>}
                               <button onClick={e => { e.stopPropagation(); setPaiementDossierId(d.id); setPaiementModal(true); }}
                                 disabled={reste <= 0}
                                 className={`text-xs font-semibold px-2.5 py-1 rounded-lg transition-colors ${reste > 0 ? "bg-amber-400 hover:bg-amber-500 text-slate-900" : "bg-slate-100 text-slate-400 cursor-not-allowed"}`}>
@@ -969,8 +1373,8 @@ export default function TransitaireDashboard() {
                                     className={`text-xs font-medium px-2 py-1 rounded-lg transition-colors whitespace-nowrap ${reste > 0 ? "bg-amber-50 hover:bg-amber-100 text-amber-700" : "bg-slate-50 text-slate-300 cursor-not-allowed"}`}>
                                     {reste > 0 ? "Paiement" : "Soldé"}
                                   </button>
-                                  <button onClick={e => { e.stopPropagation(); if (window.confirm("Supprimer ?")) supprimerDossier(d.id); }}
-                                    className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-rose-100 hover:text-rose-500 text-slate-400 flex items-center justify-center text-xs transition-colors">🗑</button>
+                                  {hasPermission("dossier.delete") && <button onClick={e => { e.stopPropagation(); if (window.confirm("Supprimer ?")) supprimerDossier(d.id); }}
+                                    className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-rose-100 hover:text-rose-500 text-slate-400 flex items-center justify-center text-xs transition-colors">🗑</button>}
                                 </div>
                               </TableCell>
                             </TableRow>
@@ -1034,11 +1438,13 @@ export default function TransitaireDashboard() {
                         className={`text-sm font-bold px-4 py-2 rounded-xl transition-colors ${reste > 0 ? "bg-amber-400 hover:bg-amber-500 text-slate-900" : "bg-slate-100 text-slate-400 cursor-not-allowed"}`}>
                         + Encaissement
                       </button>
-                      <button
-                        onClick={() => { if (window.confirm("Supprimer définitivement le dossier " + d.id + " ? Cette action est irréversible.")) supprimerDossier(d.id); }}
-                        className="text-sm font-bold px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-800 hover:text-white text-slate-500 transition-colors">
-                        🗑 Supprimer
-                      </button>
+                      {hasPermission("dossier.delete") && (
+                        <button
+                          onClick={() => { if (window.confirm("Supprimer définitivement le dossier " + d.id + " ? Cette action est irréversible.")) supprimerDossier(d.id); }}
+                          className="text-sm font-bold px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-800 hover:text-white text-slate-500 transition-colors">
+                          🗑 Supprimer
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1363,10 +1769,19 @@ export default function TransitaireDashboard() {
                     <h1 className="text-xl font-bold text-slate-900">Clients</h1>
                     <p className="text-slate-400 text-sm">{filteredClients.length} affiché(s) sur {clients.length}</p>
                   </div>
-                  <button onClick={ouvrirNouveauClient}
-                    className="bg-amber-400 hover:bg-amber-500 text-slate-900 text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm">
-                    + Nouveau client
-                  </button>
+                  {hasPermission("client.write") && (
+                    <button
+                      onClick={() => printTableClients(filteredClients, dossiers, config.entreprise)}
+                      className="flex items-center gap-2 text-xs font-semibold px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 transition-colors">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z" /></svg>
+                      Imprimer liste
+                    </button>)}
+                  {hasPermission("client.write") && (
+                    <button onClick={ouvrirNouveauClient}
+                      className="bg-amber-400 hover:bg-amber-500 text-slate-900 text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm">
+                      + Nouveau client
+                    </button>
+                  )})}
                 </div>
 
                 {/* ── Toolbar : search + type + view toggle ── */}
@@ -1464,8 +1879,8 @@ export default function TransitaireDashboard() {
                               <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <button onClick={() => ouvrirEditerClient(c)}
                                   className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-blue-100 hover:text-blue-600 text-slate-400 flex items-center justify-center text-xs transition-colors" title="Modifier">✏️</button>
-                                <button onClick={() => supprimerClient(c.id)}
-                                  className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-rose-100 hover:text-rose-600 text-slate-400 flex items-center justify-center text-xs transition-colors" title="Supprimer">🗑</button>
+                                {hasPermission("client.delete") && <button onClick={() => supprimerClient(c.id)}
+                                  className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-rose-100 hover:text-rose-600 text-slate-400 flex items-center justify-center text-xs transition-colors" title="Supprimer">🗑</button>}
                               </div>
                             </div>
                             <div className="space-y-1.5 text-xs mb-4">
@@ -1564,8 +1979,8 @@ export default function TransitaireDashboard() {
                                     </button>
                                     <button onClick={() => ouvrirEditerClient(c)}
                                       className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-blue-100 hover:text-blue-600 text-slate-400 flex items-center justify-center text-xs transition-colors">✏️</button>
-                                    <button onClick={() => supprimerClient(c.id)}
-                                      className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-rose-100 hover:text-rose-600 text-slate-400 flex items-center justify-center text-xs transition-colors">🗑</button>
+                                    {hasPermission("client.delete") && <button onClick={() => supprimerClient(c.id)}
+                                      className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-rose-100 hover:text-rose-600 text-slate-400 flex items-center justify-center text-xs transition-colors">🗑</button>}
                                   </div>
                                 </TableCell>
                               </TableRow>
@@ -1590,9 +2005,44 @@ export default function TransitaireDashboard() {
             );
           })()}
 
-          {/* ══════════ CONFIGURATION ══════════ */}
-          {vue === "configuration" && (
-            <div className="space-y-5 max-w-4xl">
+          {/* ══════════ ACCESS DENIED (non-admin trying to reach config) ══════════ */}
+          {vue === "configuration" && !isAdmin && (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-6">
+              <div className="w-20 h-20 bg-rose-100 rounded-3xl flex items-center justify-center text-4xl mb-5 shadow-sm">🔒</div>
+              <h2 className={`text-2xl font-black mb-2 ${darkMode ? "text-white" : "text-slate-800"}`}>Accès refusé</h2>
+              <p className="text-slate-400 text-sm mb-1">Cette section est réservée aux <span className="font-semibold text-amber-500">Administrateurs</span>.</p>
+              <p className="text-slate-400 text-sm mb-6">Votre rôle actuel : <span className={`font-semibold ${darkMode ? "text-slate-300" : "text-slate-600"}`}>{authUser?.role}</span></p>
+              <div className={`rounded-2xl border p-5 max-w-sm w-full mb-6 ${darkMode ? "bg-slate-800 border-slate-700" : "bg-slate-50 border-slate-200"}`}>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Vos permissions actuelles</p>
+                <div className="space-y-2">
+                  {[
+                    { label: "Tableau de bord", ok: true },
+                    { label: "Gestion dossiers", ok: true },
+                    { label: "Gestion clients", ok: true },
+                    { label: "Décaissements", ok: true },
+                    { label: "Voir les soldes", ok: false },
+                    { label: "Configuration app", ok: false },
+                    { label: "Gestion personnel", ok: false },
+                  ].map(p => (
+                    <div key={p.label} className="flex items-center justify-between">
+                      <span className={`text-sm ${darkMode ? "text-slate-300" : "text-slate-600"}`}>{p.label}</span>
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${p.ok ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-600"}`}>
+                        {p.ok ? "✓ Autorisé" : "✕ Refusé"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <button onClick={() => setVue("dashboard")}
+                className="bg-amber-400 hover:bg-amber-500 text-slate-900 font-bold px-6 py-2.5 rounded-xl transition-colors text-sm">
+                ← Retour au tableau de bord
+              </button>
+            </div>
+          )}
+
+          {/* ══════════ CONFIGURATION (admin only) ══════════ */}
+          {vue === "configuration" && isAdmin && (
+            <div className="space-y-5">
 
               {/* Header */}
               <div className="flex items-center justify-between flex-wrap gap-3">
@@ -1614,6 +2064,7 @@ export default function TransitaireDashboard() {
                   { key: "preferences", icon: "🎛️", label: "Préférences" },
                   { key: "equipe", icon: "👥", label: "Équipe" },
                   { key: "listes", icon: "📋", label: "Listes & codes" },
+                  { key: "permissions", icon: "🔑", label: "Permissions" },
                 ].map(t => (
                   <button key={t.key} onClick={() => setConfigTab(t.key)}
                     className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${configTab === t.key ? "bg-slate-900 text-white shadow-sm" : "text-slate-500 hover:text-slate-800 hover:bg-slate-50"
@@ -1722,7 +2173,6 @@ export default function TransitaireDashboard() {
                 const ROLES_LIST = ["Administrateur", "Transitaire", "Agent douanier", "Comptable", "Commercial", "Directeur", "Stagiaire"];
                 const POSTES_LIST = ["Transitaire senior", "Transitaire", "Agent douanier", "Comptable", "Commercial", "DG", "DGA", "Secrétaire", "Chauffeur", "Coursier", "Stagiaire"];
                 const DEPT_LIST = ["Direction", "Transit", "Douane", "Finance", "Commercial", "Logistique", "RH", "Informatique"];
-
 
                 const filteredP = personnel.filter(p => {
                   const matchSearch = !searchP || `${p.prenom} ${p.nom} ${p.poste} ${p.role} ${p.dept}`.toLowerCase().includes(searchP.toLowerCase());
@@ -2257,6 +2707,75 @@ export default function TransitaireDashboard() {
                       </div>
                     </CardContent>
                   </Card>
+
+                  {/* ── Apparence ── */}
+                  <Card className="rounded-2xl border-slate-100 shadow-sm lg:col-span-2">
+                    <CardHeader className="pb-3 border-b border-slate-50">
+                      <CardTitle className="text-sm font-semibold text-slate-700">Apparence & confidentialité</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-5">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                        {/* Dark / Light mode */}
+                        <div className="p-4 rounded-2xl border border-slate-200 space-y-3">
+                          <div className="flex items-center gap-3 mb-2">
+                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-lg ${darkMode ? "bg-slate-800 text-amber-400" : "bg-slate-100 text-slate-600"}`}>
+                              {darkMode ? "🌙" : "☀️"}
+                            </div>
+                            <div>
+                              <p className="text-sm font-semibold text-slate-800">Thème de l'interface</p>
+                              <p className="text-xs text-slate-400">Mode actuel : {darkMode ? "sombre" : "clair"}</p>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button onClick={() => setDarkMode(false)}
+                              className={`flex items-center justify-center gap-2 py-2.5 rounded-xl border text-xs font-semibold transition-all ${!darkMode ? "bg-amber-400 text-slate-900 border-amber-400 shadow-sm" : "bg-white text-slate-500 border-slate-200 hover:border-slate-400"}`}>
+                              <span>☀️</span> Mode clair
+                            </button>
+                            <button onClick={() => setDarkMode(true)}
+                              className={`flex items-center justify-center gap-2 py-2.5 rounded-xl border text-xs font-semibold transition-all ${darkMode ? "bg-slate-900 text-white border-slate-900 shadow-sm" : "bg-white text-slate-500 border-slate-200 hover:border-slate-400"}`}>
+                              <span>🌙</span> Mode sombre
+                            </button>
+                          </div>
+                          <p className="text-xs text-slate-400 text-center">Vous pouvez aussi basculer depuis le dashboard</p>
+                        </div>
+
+                        {/* Show / Hide solde */}
+                        <div className="p-4 rounded-2xl border border-slate-200 space-y-3">
+                          <div className="flex items-center gap-3 mb-2">
+                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-lg ${showSolde ? "bg-emerald-100 text-emerald-600" : "bg-slate-100 text-slate-500"}`}>
+                              {showSolde ? "👁" : "🙈"}
+                            </div>
+                            <div>
+                              <p className="text-sm font-semibold text-slate-800">Visibilité des soldes</p>
+                              <p className="text-xs text-slate-400">Masque les montants financiers</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200">
+                            <div>
+                              <p className="text-sm font-medium text-slate-700">{showSolde ? "Soldes visibles" : "Soldes masqués"}</p>
+                              <p className="text-xs text-slate-400 mt-0.5">
+                                {showSolde ? "Les montants sont affichés en clair" : "Les montants apparaissent comme ••••••"}
+                              </p>
+                            </div>
+                            <button onClick={() => setShowSolde(s => !s)}
+                              className={`w-12 h-6 rounded-full transition-all relative shrink-0 ${showSolde ? "bg-emerald-500" : "bg-slate-300"}`}>
+                              <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${showSolde ? "left-6" : "left-0.5"}`} />
+                            </button>
+                          </div>
+                          {/* Aperçu */}
+                          <div className="grid grid-cols-2 gap-2 pt-1">
+                            {["Total facturé", "Encaissements", "Décaissements", "Solde net"].map(lbl => (
+                              <div key={lbl} className="bg-white border border-slate-100 rounded-xl px-3 py-2">
+                                <p className="text-xs text-slate-400">{lbl}</p>
+                                <p className="text-sm font-bold text-slate-700 tabular-nums">{showSolde ? "1 250 000 FCFA" : "••••••"}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
                 </div>
               )}
 
@@ -2661,6 +3180,170 @@ export default function TransitaireDashboard() {
                   })()}
                 </div>
               )}
+
+              {/* ── Tab: Permissions & Rôles ── */}
+              {configTab === "permissions" && (() => {
+                const ALL_PERMISSIONS = [
+                  { key: "dossier.read", label: "Lire les dossiers", cat: "Dossiers", icon: "📋" },
+                  { key: "dossier.write", label: "Créer / modifier dossiers", cat: "Dossiers", icon: "✏️" },
+                  { key: "dossier.delete", label: "Supprimer des dossiers", cat: "Dossiers", icon: "🗑" },
+                  { key: "client.read", label: "Lire les clients", cat: "Clients", icon: "📋" },
+                  { key: "client.write", label: "Créer / modifier clients", cat: "Clients", icon: "✏️" },
+                  { key: "client.delete", label: "Supprimer des clients", cat: "Clients", icon: "🗑" },
+                  { key: "paiement.read", label: "Voir les encaissements", cat: "Paiements", icon: "👁" },
+                  { key: "paiement.write", label: "Saisir des encaissements", cat: "Paiements", icon: "✏️" },
+                  { key: "paiement.delete", label: "Supprimer encaissements", cat: "Paiements", icon: "🗑" },
+                  { key: "decaissement.read", label: "Voir les décaissements", cat: "Décaissements", icon: "👁" },
+                  { key: "decaissement.write", label: "Saisir des décaissements", cat: "Décaissements", icon: "✏️" },
+                  { key: "decaissement.delete", label: "Supprimer décaissements", cat: "Décaissements", icon: "🗑" },
+                  { key: "solde.view", label: "Voir les soldes financiers", cat: "Finance", icon: "💰" },
+                  { key: "config.read", label: "Accès configuration", cat: "Administration", icon: "⚙️" },
+                  { key: "config.write", label: "Modifier la configuration", cat: "Administration", icon: "✏️" },
+                  { key: "personnel.manage", label: "Gérer le personnel", cat: "Administration", icon: "👥" },
+                ];
+                const ROLES_LIST_P = ["Administrateur", "Transitaire", "Agent douanier", "Comptable", "Commercial", "Directeur", "Stagiaire"];
+                const CATEGORIES = [...new Set(ALL_PERMISSIONS.map(p => p.cat))];
+
+
+                const togglePerm = (role, perm) => {
+                  if (role === "Administrateur") return; // admin always has all
+                  const current = config.rolePermissions[role] || [];
+                  const updated = current.includes(perm)
+                    ? current.filter(p => p !== perm)
+                    : [...current, perm];
+                  setConfig(c => ({ ...c, rolePermissions: { ...c.rolePermissions, [role]: updated } }));
+                };
+
+                const hasPerm = (role, perm) => {
+                  if (role === "Administrateur") return true;
+                  return (config.rolePermissions[role] || []).includes(perm);
+                };
+
+                const countPerms = (role) => {
+                  if (role === "Administrateur") return ALL_PERMISSIONS.length;
+                  return (config.rolePermissions[role] || []).length;
+                };
+
+                const grantAll = (role) => {
+                  if (role === "Administrateur") return;
+                  setConfig(c => ({ ...c, rolePermissions: { ...c.rolePermissions, [role]: ALL_PERMISSIONS.map(p => p.key) } }));
+                };
+                const revokeAll = (role) => {
+                  if (role === "Administrateur") return;
+                  setConfig(c => ({ ...c, rolePermissions: { ...c.rolePermissions, [role]: [] } }));
+                };
+
+                return (
+                  <div className="space-y-5">
+                    {/* Header info */}
+                    <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3">
+                      <span className="text-xl shrink-0">🔑</span>
+                      <div>
+                        <p className="text-sm font-semibold text-amber-800">Gestion des permissions par rôle</p>
+                        <p className="text-xs text-amber-700 mt-0.5">Les permissions s'appliquent instantanément. Le rôle <strong>Administrateur</strong> dispose toujours de tous les droits et ne peut pas être restreint.</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
+
+                      {/* ── Colonne rôles ── */}
+                      <div className="lg:col-span-1">
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Rôles</p>
+                        <div className="space-y-1.5">
+                          {ROLES_LIST_P.map(role => {
+                            const count = countPerms(role);
+                            const isSelected = selectedRole === role;
+                            const isAdm = role === "Administrateur";
+                            return (
+                              <button key={role} onClick={() => setSelectedRole(role)}
+                                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-left transition-all ${isSelected ? "bg-slate-900 border-slate-900 shadow-sm" : "bg-white border-slate-200 hover:border-slate-400"}`}>
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className={`text-sm ${isSelected ? "text-white" : "text-slate-700"} font-medium truncate`}>{role}</span>
+                                  {isAdm && <span className="text-xs px-1.5 py-0.5 rounded-md bg-amber-400/20 text-amber-500 font-bold shrink-0">ADM</span>}
+                                </div>
+                                <span className={`text-xs font-bold shrink-0 ml-2 ${isSelected ? "text-amber-400" : "text-slate-400"}`}>{count}/{ALL_PERMISSIONS.length}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* ── Matrice permissions ── */}
+                      <div className="lg:col-span-3 space-y-4">
+                        <div className="flex items-center justify-between flex-wrap gap-3">
+                          <div>
+                            <h3 className="text-sm font-bold text-slate-800">
+                              Permissions — <span className="text-amber-600">{selectedRole}</span>
+                            </h3>
+                            <p className="text-xs text-slate-400 mt-0.5">
+                              {countPerms(selectedRole)}/{ALL_PERMISSIONS.length} permissions actives
+                            </p>
+                          </div>
+                          {selectedRole !== "Administrateur" && (
+                            <div className="flex gap-2">
+                              <button onClick={() => grantAll(selectedRole)}
+                                className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-700 transition-colors">
+                                ✓ Tout autoriser
+                              </button>
+                              <button onClick={() => revokeAll(selectedRole)}
+                                className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-700 transition-colors">
+                                ✕ Tout révoquer
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Permission matrix */}
+                        {CATEGORIES.map(cat => {
+                          const catPerms = ALL_PERMISSIONS.filter(p => p.cat === cat);
+                          const allGranted = catPerms.every(p => hasPerm(selectedRole, p.key));
+                          return (
+                            <Card key={cat} className="rounded-2xl border-slate-100 shadow-sm overflow-hidden">
+                              <div className="flex items-center justify-between px-5 py-3 bg-slate-50 border-b border-slate-100">
+                                <p className="text-xs font-bold text-slate-600 uppercase tracking-wider">{cat}</p>
+                                {selectedRole !== "Administrateur" && (
+                                  <button
+                                    onClick={() => catPerms.forEach(p => { if (allGranted) { if (hasPerm(selectedRole, p.key)) togglePerm(selectedRole, p.key); } else { if (!hasPerm(selectedRole, p.key)) togglePerm(selectedRole, p.key); } })}
+                                    className={`text-xs font-semibold px-2.5 py-1 rounded-full border transition-all ${allGranted ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200" : "bg-slate-50 text-slate-500 border-slate-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200"}`}>
+                                    {allGranted ? "✓ Tous accordés" : "Tout accorder"}
+                                  </button>
+                                )}
+                              </div>
+                              <CardContent className="p-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  {catPerms.map(perm => {
+                                    const granted = hasPerm(selectedRole, perm.key);
+                                    const isAdm = selectedRole === "Administrateur";
+                                    return (
+                                      <div key={perm.key}
+                                        className={`flex items-center justify-between gap-3 p-3 rounded-xl border transition-all ${granted ? "bg-emerald-50 border-emerald-200" : "bg-slate-50 border-slate-200"} ${isAdm ? "opacity-80" : "cursor-pointer hover:shadow-sm"}`}
+                                        onClick={() => !isAdm && togglePerm(selectedRole, perm.key)}>
+                                        <div className="flex items-center gap-2.5 min-w-0">
+                                          <span className="text-base shrink-0">{perm.icon}</span>
+                                          <div className="min-w-0">
+                                            <p className={`text-xs font-semibold truncate ${granted ? "text-emerald-800" : "text-slate-600"}`}>{perm.label}</p>
+                                            <code className={`text-xs font-mono ${granted ? "text-emerald-500" : "text-slate-400"}`}>{perm.key}</code>
+                                          </div>
+                                        </div>
+                                        <div className={`w-10 h-5 rounded-full shrink-0 relative transition-all ${granted ? "bg-emerald-500" : "bg-slate-300"}`}>
+                                          <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${granted ? "left-5" : "left-0.5"}`} />
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
+
+                        {/* JSON preview */}
+                        
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           )}
         </div>
