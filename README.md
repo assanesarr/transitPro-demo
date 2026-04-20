@@ -1,5 +1,7 @@
 # 🚀 TransitPro
 
+### 🧾 Plateforme intelligente de gestion de transit & logistique
+
 <p align="center">
   <img src="./images/transit-pro-banier.png" alt="TransitPro Banner" />
 </p>
